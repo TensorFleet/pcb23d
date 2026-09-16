@@ -130,6 +130,72 @@ import Base from "../layouts/Base.astro";
       </div>
     </section>
 
+
+    <section class="agent" id="agent">
+      <div class="agent-head">
+        <div>
+          <p class="kicker"><span></span> Copy me for your agent</p>
+          <h2>Hand this to Claude, Codex, or Cursor.</h2>
+          <p class="lede">
+            Paste the block into your coding agent. It downloads the right release binary for the
+            machine it is on and renders your KiCad project. Also served as plain text at
+            <a href="/agent.md"><code>/agent.md</code></a>.
+          </p>
+        </div>
+        <button type="button" id="copy-agent" class="btn-primary">Copy instructions</button>
+      </div>
+      <pre class="agent-block" id="agent-block" tabindex="0"># PCB23D for agents — render a KiCad board to 3D PNGs
+
+You are rendering a KiCad PCB to PNG images (top, bottom, angled 3D). Use the `pcb23d`
+single-binary CLI. It has no dependencies and runs offline.
+
+## 1. Download the binary for this machine
+
+Releases: https://github.com/TensorFleet/pcb23d/releases/latest
+Asset names: pcb23d-linux-x64, pcb23d-linux-arm64, pcb23d-darwin-x64, pcb23d-darwin-arm64, pcb23d-windows-x64.exe
+
+Linux/macOS:
+
+    os=$(uname -s | tr '[:upper:]' '[:lower:]')          # linux | darwin
+    arch=$(uname -m); case "$arch" in x86_64) arch=x64;; aarch64|arm64) arch=arm64;; esac
+    curl -fsSL -o pcb23d "https://github.com/TensorFleet/pcb23d/releases/latest/download/pcb23d-$&#123;os&#125;-$&#123;arch&#125;"
+    chmod +x pcb23d
+    ./pcb23d --version
+
+Windows (PowerShell):
+
+    Invoke-WebRequest https://github.com/TensorFleet/pcb23d/releases/latest/download/pcb23d-windows-x64.exe -OutFile pcb23d.exe
+    .\pcb23d.exe --version
+
+Alternative without a binary (needs Bun or Node 18+): `bunx pcb23d --help` or `npx pcb23d --help`
+are not available; instead `bun add pcb23d` and call `renderPcb()` from TypeScript.
+
+## 2. Pass in the KiCad project
+
+Input is either a `.kicad_pcb` file or a `.zip` of the whole KiCad project. Zips are searched
+for the board; the `.kicad_pro`'s sibling `.kicad_pcb` wins, backups are ignored.
+
+    ./pcb23d path/to/project.zip --out renders --json
+    ./pcb23d path/to/board.kicad_pcb --out renders --views top,bottom,angle
+
+Outputs land in `--out` as `&lt;input-stem>-&lt;view>.png` (transparent background by default).
+`--json` prints a summary to stdout: board size in mm, layer count, footprint/track/via counts,
+and the path of every PNG written. Exit code 0 on success, 1 if any input failed, 2 for bad flags.
+
+## 3. Useful options
+
+    --views top,bottom,angle,angle-bottom,front,side   # or: all
+    --views hero=45/30 --views low=20/12/ortho          # custom azimuth/elevation[/persp|ortho]
+    --width 1600 --height 1200 --supersample 2          # image size, anti-aliasing 1-4
+    --bg "#ffffff"                                      # or transparent (default)
+    --mask black --finish silver --silk white           # override board colours
+    --no-components                                     # bare board, no body boxes
+
+Limits to tell the user about: silkscreen text and footprint 3D models are not drawn
+(components are boxes sized from fab outlines); only the outer copper layers are visible.
+</pre>
+    </section>
+
     <section class="library" id="library">
       <div class="lib-grid">
         <div>
@@ -404,6 +470,23 @@ pcb23d hat.kicad_pcb --views hero=45/30 --bg #ffffff</code></pre>
     if (!board) return;
     preferred = "custom";
     send([customView()]);
+  });
+
+  const copyAgent = $<HTMLButtonElement>("#copy-agent");
+  const agentBlock = $<HTMLPreElement>("#agent-block");
+  copyAgent.addEventListener("click", async () => {
+    const text = agentBlock.textContent ?? "";
+    try {
+      await navigator.clipboard.writeText(text);
+      copyAgent.textContent = "Copied";
+    } catch {
+      const range = document.createRange();
+      range.selectNodeContents(agentBlock);
+      getSelection()?.removeAllRanges();
+      getSelection()?.addRange(range);
+      copyAgent.textContent = "Select-all + copy";
+    }
+    setTimeout(() => (copyAgent.textContent = "Copy instructions"), 1800);
   });
 
   downloadAll.addEventListener("click", async () => {
@@ -746,9 +829,48 @@ pcb23d hat.kicad_pcb --views hero=45/30 --bg #ffffff</code></pre>
     line-height: 1.5;
   }
   .how,
-  .library {
+  .library,
+  .agent {
     border-top: 1px solid var(--line);
     padding: 72px 32px;
+  }
+  .agent-head {
+    max-width: 1100px;
+    margin: 0 auto 22px;
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    gap: 24px;
+    flex-wrap: wrap;
+  }
+  .agent-head .lede {
+    max-width: 640px;
+    margin: 0;
+  }
+  .agent-head a {
+    color: var(--green);
+  }
+  .agent h2 {
+    margin: 14px 0 12px;
+    font-size: clamp(1.8rem, 3.6vw, 2.8rem);
+    letter-spacing: -0.045em;
+    line-height: 1.05;
+  }
+  .agent-block {
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 20px 22px;
+    border-radius: 14px;
+    background: var(--paper-2);
+    border: 1px solid var(--line);
+    overflow-x: auto;
+    font-size: 12.5px;
+    line-height: 1.6;
+    color: var(--ink);
+    white-space: pre;
+  }
+  .agent-block:focus-visible {
+    outline: 1px solid var(--acid);
   }
   .how-grid,
   .lib-grid {
@@ -825,6 +947,10 @@ pcb23d hat.kicad_pcb --views hero=45/30 --bg #ffffff</code></pre>
     }
   }
   @media (max-width: 640px) {
+    .agent {
+      padding-left: 18px;
+      padding-right: 18px;
+    }
     .hero {
       padding: 56px 18px 40px;
     }

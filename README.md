@@ -1,7 +1,7 @@
 # PCB23D
 
 Turn a KiCad board into 3D renders. Drop a project zip or a `.kicad_pcb` on
-[pcb23d.com](https://pcb23d.com) and get top, bottom, and angled PNGs. The same
+[pcbto3d.com](https://pcbto3d.com) and get top, bottom, and angled PNGs. The same
 renderer ships as the `pcb23d` npm library and as a single-binary CLI.
 
 Everything is pure TypeScript: an S-expression parser, a 2D layer compositor,
@@ -112,7 +112,7 @@ using the core package directly. Deploy as Cloudflare static assets:
 ```bash
 bun run --cwd apps/web cf:dev             # local wrangler
 bun run --cwd apps/web deploy:staging     # pcb23d-staging.workers.dev
-bun run --cwd apps/web deploy:production  # pcb23d.com custom domain
+bun run --cwd apps/web deploy:production  # pcbto3d.com custom domain (pcb23d.com redirects)
 ```
 
 ## CI

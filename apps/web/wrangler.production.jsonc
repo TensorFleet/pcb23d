@@ -1,15 +1,24 @@
 {
   "$schema": "../../node_modules/wrangler/config-schema.json",
   "name": "pcb23d",
+  "main": "src/worker.ts",
   "compatibility_date": "2026-09-14",
   "workers_dev": true,
+  "observability": { "enabled": true },
+  // pcbto3d.com is the primary site. pcb23d.com and both www hosts 301 to it (src/worker.ts).
   "routes": [
+    { "pattern": "pcbto3d.com", "custom_domain": true },
+    { "pattern": "www.pcbto3d.com", "custom_domain": true },
     { "pattern": "pcb23d.com", "custom_domain": true },
     { "pattern": "www.pcb23d.com", "custom_domain": true }
   ],
+  "vars": { "PRIMARY_HOST": "pcbto3d.com" },
   "assets": {
     "directory": "./dist",
+    "binding": "ASSETS",
     "html_handling": "auto-trailing-slash",
-    "not_found_handling": "404-page"
+    "not_found_handling": "404-page",
+    // the script must see every request so foreign hosts can be redirected
+    "run_worker_first": true
   }
 }

@@ -6,3 +6,7 @@
 
 /favicon.svg
   Cache-Control: public, max-age=86400
+
+/agent.md
+  Content-Type: text/markdown; charset=utf-8
+  Cache-Control: public, max-age=3600

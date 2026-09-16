@@ -1,11 +1,15 @@
 {
   "$schema": "../../node_modules/wrangler/config-schema.json",
   "name": "pcb23d",
+  "main": "src/worker.ts",
   "compatibility_date": "2026-09-14",
   "workers_dev": true,
+  "observability": { "enabled": true },
   "assets": {
     "directory": "./dist",
+    "binding": "ASSETS",
     "html_handling": "auto-trailing-slash",
-    "not_found_handling": "404-page"
+    "not_found_handling": "404-page",
+    "run_worker_first": false
   }
 }

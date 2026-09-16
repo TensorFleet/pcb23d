@@ -5,7 +5,7 @@ const core = fileURLToPath(new URL("../../packages/core/src/index.ts", import.me
 
 export default defineConfig({
   output: "static",
-  site: process.env.PUBLIC_SITE_URL ?? "https://pcb23d.com",
+  site: process.env.PUBLIC_SITE_URL ?? "https://pcbto3d.com",
   build: { format: "directory" },
   vite: {
     resolve: { alias: [{ find: /^pcb23d$/, replacement: core }] },
