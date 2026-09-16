@@ -1,6 +1,6 @@
 /**
- * /img/gh/{owner}/{repo}[/@ref]        share page: the render up top, og:image set to it
- * /img/gh/{owner}/{repo}[/@ref].jpg    the render itself (also .png; `?view=top|bottom|…`)
+ * /img/{gh|cb|gl}/{owner}/{repo}[/@ref]        share page: the render up top, og:image set to it
+ * /img/{gh|cb|gl}/{owner}/{repo}[/@ref].jpg    the render itself (also .png; `?view=top|bottom|…`)
  *
  * The board comes from pcbFiddle's snapshot API; the image is cached in the shared R2
  * bucket keyed by commit (see `gh.ts`) and in the edge cache. Library 3D models are read
@@ -26,10 +26,13 @@ import {
   formatImagePath,
   isCommitSha,
   isViewName,
+  kindOf,
   OG_HEIGHT,
   OG_RENDER,
   OG_WIDTH,
   renderObjectKey,
+  SOURCE_LABEL,
+  sourceUrl,
   type FiddleClient,
   type ImageFormat,
   type ImageSlug,
@@ -98,7 +101,7 @@ async function renderFromFiddle(
       404,
     );
   }
-  const key = renderObjectKey(manifest.owner, manifest.repo, manifest.sha, spec);
+  const key = renderObjectKey(manifest.owner, manifest.repo, manifest.sha, spec, kindOf(slug));
   if (env.RENDERS) {
     const stored = await env.RENDERS.get(key);
     if (stored)
@@ -263,10 +266,9 @@ export function fillPage(template: Response, fill: PageFill): Response {
   const imageUrl = origin + formatImagePath(slug, "jpg");
   const title = `${name} — 3D render · PCB23D`;
   const imageAlt = `3D render of the ${name} PCB`;
-  const description = `3D render of the ${slug.owner}/${slug.repo} KiCad board${slug.ref ? ` at ${slug.ref}` : ""}, drawn from the GitHub source.`;
-  const github = `https://github.com/${encodeURIComponent(slug.owner)}/${encodeURIComponent(slug.repo)}${
-    slug.ref ? `/tree/${slug.ref.split("/").map(encodeURIComponent).join("/")}` : ""
-  }`;
+  const host = SOURCE_LABEL[kindOf(slug)];
+  const description = `3D render of the ${slug.owner}/${slug.repo} KiCad board${slug.ref ? ` at ${slug.ref}` : ""}, drawn from the ${host} source.`;
+  const source = sourceUrl(slug);
   const fiddle = (fill.fiddleOrigin ?? "https://pcbfiddle.com") + fiddlePath(slug);
   const attr = (name: string, value: string) => ({
     element(el: HTMLRewriterTypes.Element) {
@@ -305,7 +307,8 @@ export function fillPage(template: Response, fill: PageFill): Response {
         el.setAttribute("alt", imageAlt);
       },
     })
-    .on('[data-slot="github"]', attr("href", github))
+    .on('[data-slot="host-label"]', textOf(host))
+    .on('[data-slot="github"]', attr("href", source))
     .on('[data-slot="fiddle"]', attr("href", fiddle))
     .on('[data-slot="download"]', attr("href", imageUrl))
     .on('[data-slot="page-url"]', textOf(pageUrl))

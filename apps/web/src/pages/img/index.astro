@@ -1,21 +1,21 @@
 ---
 /**
- * Template for /img/gh/<owner>/<repo>[/@ref]. The edge script (src/edge/img.ts) serves this
- * page for every slug and fills the data-slot elements and og tags with HTMLRewriter, so
- * the placeholders below are never what a visitor sees for a real repo. Visiting /img/
- * directly shows only the picker.
+ * Template for /img/{gh|cb|gl}/<owner>/<repo>[/@ref]. The edge script (src/edge/img.ts)
+ * serves this page for every slug and fills the data-slot elements and og tags with
+ * HTMLRewriter, so the placeholders below are never what a visitor sees for a real repo.
+ * Visiting /img/ directly shows only the picker.
  */
 import Base from "../../layouts/Base.astro";
 ---
 
 <Base
   title="Board render — PCB23D"
-  description="Link to a 3D render of any public KiCad board on GitHub. The image is drawn from the source and cached."
+  description="Link to a 3D render of any public KiCad board on GitHub, Codeberg, or GitLab. The image is drawn from the source and cached."
   image="https://pcbto3d.com/img/placeholder.jpg"
 >
   <main class="wrap">
     <section class="render" data-slot="render" hidden>
-      <p class="kicker"><span></span> GitHub → 3D render</p>
+      <p class="kicker"><span></span> <span data-slot="host-label">GitHub</span> → 3D render</p>
       <h1 data-slot="repo">owner/repo</h1>
 
       <figure class="stage" id="stage">
@@ -23,7 +23,8 @@ import Base from "../../layouts/Base.astro";
         <figcaption class="stage-state" id="stage-state">
           <span class="spinner" aria-hidden="true"></span>
           <em
-            >Rendering from the GitHub source… the first render of a commit takes a few seconds.</em
+            >Rendering from the <span data-slot="host-label">GitHub</span> source… the first render
+            of a commit takes a few seconds.</em
           >
         </figcaption>
       </figure>
@@ -38,7 +39,9 @@ import Base from "../../layouts/Base.astro";
       <div class="actions">
         <a class="btn-primary" data-slot="download" href="#" download>Download JPG</a>
         <a class="btn-ghost" data-slot="fiddle" href="https://pcbfiddle.com">Open in pcbFiddle</a>
-        <a class="btn-ghost" data-slot="github" href="https://github.com">View on GitHub</a>
+        <a class="btn-ghost" data-slot="github" href="https://github.com"
+          >View on <span data-slot="host-label">GitHub</span></a
+        >
       </div>
 
       <section class="share">
@@ -78,12 +81,11 @@ import Base from "../../layouts/Base.astro";
 
     <section class="picker" data-slot="picker">
       <p class="kicker"><span></span> Link to a render</p>
-      <h1>Any public KiCad board on GitHub, as a shareable 3D image.</h1>
+      <h1>Any public KiCad board on GitHub, Codeberg, or GitLab, as a shareable 3D image.</h1>
       <p class="picker-lede">
-        <code>pcbto3d.com/img/gh/owner/repo</code> is a page with the render up top and an <code
-          >og:image</code
-        > set to it, so the board shows up wherever the link is unfurled. The image is drawn once per
-        commit and cached.
+        <code>pcbto3d.com/img/gh/owner/repo</code> (or <code>/cb/</code>, <code>/gl/</code>) is a
+        page with the render up top and an <code>og:image</code> set to it, so the board shows up
+        wherever the link is unfurled. The image is drawn once per commit and cached.
       </p>
       <form class="picker-form" id="picker-form" autocomplete="off">
         <input
@@ -91,7 +93,7 @@ import Base from "../../layouts/Base.astro";
           name="repo"
           type="text"
           spellcheck="false"
-          placeholder="github.com/owner/repo or owner/repo"
+          placeholder="github.com/owner/repo, codeberg.org/…, gitlab.com/…, or owner/repo"
         />
         <button type="submit" class="btn-primary">Render</button>
       </form>
@@ -101,6 +103,8 @@ import Base from "../../layouts/Base.astro";
 </Base>
 
 <script>
+  import { formatImagePath, parsePickerInput } from "../../edge/hosts";
+
   const image = document.querySelector<HTMLImageElement>("#board-image");
   const state = document.querySelector<HTMLElement>("#stage-state");
   const stage = document.querySelector<HTMLElement>("#stage");
@@ -173,20 +177,16 @@ import Base from "../../layouts/Base.astro";
   const error = document.querySelector<HTMLElement>("#picker-error");
   form?.addEventListener("submit", (event) => {
     event.preventDefault();
-    const raw = (input?.value ?? "")
-      .trim()
-      .replace(/^https?:\/\//i, "")
-      .replace(/^(www\.)?github\.com\//i, "");
-    const m = /^([\w.-]+)\/([\w.-]+?)(?:\.git)?(?:\/tree\/([^\s]+))?\/?$/.exec(raw);
-    if (!m) {
+    const slug = parsePickerInput(input?.value ?? "");
+    if (!slug) {
       if (error) {
-        error.textContent = "Enter a GitHub repo as owner/repo or a github.com URL.";
+        error.textContent =
+          "Enter a GitHub, Codeberg, or GitLab repo as a URL, or GitHub owner/repo.";
         error.hidden = false;
       }
       return;
     }
-    const ref = m[3] ? `/@${m[3].split("/").map(encodeURIComponent).join("/")}` : "";
-    location.href = `/img/gh/${encodeURIComponent(m[1]!)}/${encodeURIComponent(m[2]!)}${ref}`;
+    location.href = formatImagePath(slug);
   });
 </script>
 

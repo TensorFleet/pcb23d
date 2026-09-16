@@ -3,9 +3,10 @@
  *  - Host canonicalisation: with PRIMARY_HOST set, other hosts 301 to it (production).
  *  - /api/models/<library key>: KiCad 3D models converted to pcb23d's mesh format,
  *    cached in R2 (bucket MODELS) and the edge cache (`edge/models.ts`).
- *  - /img/gh/<owner>/<repo>[/@ref][.jpg|.png]: a board render straight from GitHub, cached
- *    in the R2 bucket shared with pcbfiddle.com, and a share page whose og:image is that
- *    render (`edge/img.ts`). Anything else is served from the static assets.
+ *  - /img/{gh|cb|gl}/<owner>/<repo>[/@ref][.jpg|.png]: a board render from GitHub,
+ *    Codeberg, or GitLab, cached in the R2 bucket shared with pcbfiddle.com, and a share
+ *    page whose og:image is that render (`edge/img.ts`). Anything else is served from
+ *    the static assets.
  */
 import type { Env, ExecutionContextLike } from "./edge/env";
 import { parseImagePath } from "./edge/gh";
@@ -36,10 +37,13 @@ export default {
         renders: Boolean(env.RENDERS),
       });
     }
-    if (url.pathname.startsWith("/img/gh/")) {
+    if (/^\/img\/(gh|cb|gl)(\/|$)/.test(url.pathname)) {
       const parsed = parseImagePath(url.pathname);
-      if (!parsed)
-        return new Response("expected /img/gh/<owner>/<repo>[/@ref][.jpg|.png]", { status: 400 });
+      if (!parsed) {
+        return new Response("expected /img/{gh|cb|gl}/<owner>/<repo>[/@ref][.jpg|.png]", {
+          status: 400,
+        });
+      }
       if (parsed.format) return handleImage(request, env, ctx, url, parsed.slug, parsed.format);
       return handlePage(request, env, url, parsed.slug);
     }

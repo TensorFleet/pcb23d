@@ -25,8 +25,9 @@ const template = `<!doctype html><html><head>
 <a data-view="angle" href="#">Angle</a><a data-view="top" href="#">Top</a>
 <a data-slot="download" href="#">dl</a>
 <a data-slot="fiddle" href="#">fiddle</a>
-<a data-slot="github" href="#">gh</a>
+<a data-slot="github" href="#">View on <span data-slot="host-label">GitHub</span></a>
 <code data-slot="page-url">x</code><code data-slot="image-url">x</code>
+
 </section>
 <section data-slot="picker">picker</section>
 </body></html>`;
@@ -73,12 +74,45 @@ describe("fillPage", () => {
     expect(html).toContain(
       '<a data-view="top" href="https://pcbto3d.com/img/gh/bob/nancy/@main.jpg?view=top">',
     );
-    expect(html).toContain(
-      '<a data-slot="fiddle" href="https://pcbfiddle.com/gh/bob/nancy/@main">',
-    );
+    expect(html).toContain('<a data-slot="fiddle" href="https://pcbfiddle.com/gh/bob/nancy/@main">');
     expect(html).toContain('<a data-slot="github" href="https://github.com/bob/nancy/tree/main">');
+    expect(html).toContain("View on <span data-slot=\"host-label\">GitHub</span>");
     expect(html).toContain('<section data-slot="render">');
     expect(html).toContain('<section data-slot="picker" hidden="">');
+  });
+  test("Codeberg and GitLab slugs point og:image and source links at the right host", async () => {
+    const cb = fillPage(new Response(template, { headers: { "content-type": "text/html" } }), {
+      origin: "https://pcbto3d.com",
+      slug: { kind: "cb", owner: "NollKollTroll", repo: "OpenSpand", ref: "main" },
+    });
+    const cbHtml = await cb.text();
+    expect(cbHtml).toContain(
+      '<meta property="og:image" content="https://pcbto3d.com/img/cb/NollKollTroll/OpenSpand/@main.jpg" />',
+    );
+    expect(cbHtml).toContain(
+      '<a data-slot="fiddle" href="https://pcbfiddle.com/cb/NollKollTroll/OpenSpand/@main">',
+    );
+    expect(cbHtml).toContain(
+      '<a data-slot="github" href="https://codeberg.org/NollKollTroll/OpenSpand/src/branch/main">',
+    );
+    expect(cbHtml).toContain("drawn from the Codeberg source.");
+    expect(cbHtml).toContain('<span data-slot="host-label">Codeberg</span>');
+
+    const gl = fillPage(new Response(template, { headers: { "content-type": "text/html" } }), {
+      origin: "https://pcbto3d.com",
+      slug: { kind: "gl", owner: "sixxie", repo: "dragon64", ref: "master" },
+    });
+    const glHtml = await gl.text();
+    expect(glHtml).toContain(
+      '<meta property="og:image" content="https://pcbto3d.com/img/gl/sixxie/dragon64/@master.jpg" />',
+    );
+    expect(glHtml).toContain(
+      '<a data-slot="fiddle" href="https://pcbfiddle.com/gl/sixxie/dragon64/@master">',
+    );
+    expect(glHtml).toContain(
+      '<a data-slot="github" href="https://gitlab.com/sixxie/dragon64/-/tree/master">',
+    );
+    expect(glHtml).toContain("drawn from the GitLab source.");
   });
 });
 

@@ -3,8 +3,8 @@
 PCB23D is a static-assets Worker (`apps/web/dist`) with a small script in front
 (`apps/web/src/worker.ts`): host canonicalisation, `/api/models/*`, which converts KiCad
 library WRL models to pcb23d's mesh format and caches them in the R2 bucket `pcb23d-models`
-(created 2026-09-16; shared by local, staging, and production), and `/img/gh/*`, which
-renders GitHub boards into the bucket shared with pcbfiddle.com. No KV or cron.
+(created 2026-09-16; shared by local, staging, and production), and `/img/{gh|cb|gl}/*`, which
+renders GitHub, Codeberg, and GitLab boards into the bucket shared with pcbfiddle.com. No KV or cron.
 
 | Binding / var | Local + staging | Production |
 | --- | --- | --- |
