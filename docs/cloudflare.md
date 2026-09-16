@@ -1,9 +1,21 @@
 # Cloudflare deployment
 
 PCB23D is a static-assets Worker (`apps/web/dist`) with a small script in front
-(`apps/web/src/worker.ts`): host canonicalisation plus `/api/models/*`, which converts KiCad
+(`apps/web/src/worker.ts`): host canonicalisation, `/api/models/*`, which converts KiCad
 library WRL models to pcb23d's mesh format and caches them in the R2 bucket `pcb23d-models`
-(created 2026-09-16; shared by local, staging, and production). No KV or cron.
+(created 2026-09-16; shared by local, staging, and production), and `/img/gh/*`, which
+renders GitHub boards into the bucket shared with pcbfiddle.com. No KV or cron.
+
+| Binding / var | Local + staging | Production |
+| --- | --- | --- |
+| `MODELS` (R2) | `pcb23d-models` | `pcb23d-models` |
+| `RENDERS` (R2, pcbFiddle's git-snapshot bucket) | `fabplane-opensource-staging` | `fabplane-opensource` |
+| `PCBFIDDLE_ORIGIN` | `https://pcbfiddle-staging.floral-lab-08df.workers.dev` | `https://pcbfiddle.com` |
+
+`RENDERS` is owned by pcbFiddle; this Worker only writes `…/{sha}/renders/*` objects under
+snapshots pcbFiddle created. The buckets already exist (pcbFiddle creates them). `nodejs_compat`
+is on for the JPEG encoder, and `cpu_ms` is raised to 60 s because a large board can take a
+few seconds to rasterise.
 
 | Config | Worker | Hosts |
 | --- | --- | --- |

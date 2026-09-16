@@ -30,11 +30,16 @@ export default {
     }
     if (url.pathname.startsWith("/api/models/")) return handleModel(request, env, ctx, url);
     if (url.pathname === "/api/health") {
-      return Response.json({ ok: true, models: Boolean(env.MODELS), renders: Boolean(env.RENDERS) });
+      return Response.json({
+        ok: true,
+        models: Boolean(env.MODELS),
+        renders: Boolean(env.RENDERS),
+      });
     }
     if (url.pathname.startsWith("/img/gh/")) {
       const parsed = parseImagePath(url.pathname);
-      if (!parsed) return new Response("expected /img/gh/<owner>/<repo>[/@ref][.jpg|.png]", { status: 400 });
+      if (!parsed)
+        return new Response("expected /img/gh/<owner>/<repo>[/@ref][.jpg|.png]", { status: 400 });
       if (parsed.format) return handleImage(request, env, ctx, url, parsed.slug, parsed.format);
       return handlePage(request, env, url, parsed.slug);
     }

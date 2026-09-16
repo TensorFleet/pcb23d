@@ -7,7 +7,15 @@
  * straight from this Worker's mesh cache, one R2 read per part, instead of over HTTP.
  */
 import { encode as encodeJpeg } from "jpeg-js";
-import { DEFAULT_MODEL_API, isValidModelKey, modelApiUrl, parseColor, pickBoardPath, renderPcb, VIEWS } from "pcb23d";
+import {
+  DEFAULT_MODEL_API,
+  isValidModelKey,
+  modelApiUrl,
+  parseColor,
+  pickBoardPath,
+  renderPcb,
+  VIEWS,
+} from "pcb23d";
 import { edgeCache, type Env, type ExecutionContextLike } from "./env";
 import {
   contentTypeFor,
@@ -50,7 +58,8 @@ export async function handleImage(
   slug: ImageSlug,
   format: ImageFormat,
 ): Promise<Response> {
-  if (request.method !== "GET" && request.method !== "HEAD") return plain("method not allowed", 405);
+  if (request.method !== "GET" && request.method !== "HEAD")
+    return plain("method not allowed", 405);
   const viewParam = url.searchParams.get("view") ?? OG_RENDER.view;
   if (!isViewName(viewParam)) return plain(`unknown view "${viewParam}"`, 400);
   const spec: RenderSpec = { ...OG_RENDER, view: viewParam, format };
@@ -84,22 +93,37 @@ async function renderFromFiddle(
   const manifest = await fiddle.manifest(slug);
   const boardPath = pickBoardPath(manifest.files.map((file) => file.path));
   if (!boardPath) {
-    return plain(`${manifest.owner}/${manifest.repo} has no .kicad_pcb to render (Eagle and EasyEDA boards are viewer-only)`, 404);
+    return plain(
+      `${manifest.owner}/${manifest.repo} has no .kicad_pcb to render (Eagle and EasyEDA boards are viewer-only)`,
+      404,
+    );
   }
   const key = renderObjectKey(manifest.owner, manifest.repo, manifest.sha, spec);
   if (env.RENDERS) {
     const stored = await env.RENDERS.get(key);
-    if (stored) return imageResponse(await stored.arrayBuffer(), spec.format, cacheControl, "r2", manifest.sha);
+    if (stored)
+      return imageResponse(
+        await stored.arrayBuffer(),
+        spec.format,
+        cacheControl,
+        "r2",
+        manifest.sha,
+      );
   }
   const entry = manifest.files.find((file) => file.path === boardPath);
-  if (entry && entry.size > MAX_BOARD_BYTES) return plain(`${boardPath} is too large to render here`, 413);
+  if (entry && entry.size > MAX_BOARD_BYTES)
+    return plain(`${boardPath} is too large to render here`, 413);
   const bytes = await fiddle.file(manifest, boardPath);
   const image = await renderBoardImage(bytes, boardPath, spec, env, ctx);
   if (env.RENDERS) {
     ctx.waitUntil(
       env.RENDERS.put(key, image, {
         httpMetadata: { contentType: contentTypeFor(spec.format) },
-        customMetadata: { board: boardPath, renderedAt: new Date().toISOString(), renderer: "pcbto3d.com" },
+        customMetadata: {
+          board: boardPath,
+          renderedAt: new Date().toISOString(),
+          renderer: "pcbto3d.com",
+        },
       }),
     );
   }
@@ -126,7 +150,9 @@ export async function renderBoardImage(
   const view = result.images[spec.view]!;
   if (spec.format === "png") return view.png;
   const rgba = view.rgba;
-  return new Uint8Array(encodeJpeg({ data: rgba.data, width: rgba.width, height: rgba.height }, JPEG_QUALITY).data);
+  return new Uint8Array(
+    encodeJpeg({ data: rgba.data, width: rgba.width, height: rgba.height }, JPEG_QUALITY).data,
+  );
 }
 
 /**
@@ -137,7 +163,8 @@ export async function renderBoardImage(
 function localModelFetch(env: Env, ctx: ExecutionContextLike): typeof fetch {
   const prefix = modelApiUrl("", DEFAULT_MODEL_API);
   let budget = MODEL_BYTE_BUDGET;
-  const missing = () => new Response(null, { status: 404, headers: { "x-pcb23d-model": "missing" } });
+  const missing = () =>
+    new Response(null, { status: 404, headers: { "x-pcb23d-model": "missing" } });
   return (async (input: RequestInfo | URL, init?: RequestInit) => {
     const href = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
     if (!href.startsWith(prefix)) return fetch(input, init);
@@ -146,11 +173,19 @@ function localModelFetch(env: Env, ctx: ExecutionContextLike): typeof fetch {
     const found = await loadModelMesh(key, env, ctx);
     if (found.kind !== "mesh") return missing();
     budget -= found.bytes.byteLength;
-    return new Response(found.bytes as BodyInit, { headers: { "content-type": "application/octet-stream" } });
+    return new Response(found.bytes as BodyInit, {
+      headers: { "content-type": "application/octet-stream" },
+    });
   }) as typeof fetch;
 }
 
-function imageResponse(body: ArrayBuffer | Uint8Array, format: ImageFormat, cacheControl: string, source: string, sha: string): Response {
+function imageResponse(
+  body: ArrayBuffer | Uint8Array,
+  format: ImageFormat,
+  cacheControl: string,
+  source: string,
+  sha: string,
+): Response {
   return new Response(body as BodyInit, {
     headers: {
       "Content-Type": contentTypeFor(format),
@@ -166,15 +201,30 @@ function imageResponse(body: ArrayBuffer | Uint8Array, format: ImageFormat, cach
 function plain(message: string, status: number): Response {
   return new Response(message, {
     status,
-    headers: { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "no-store", "Access-Control-Allow-Origin": "*" },
+    headers: {
+      "Content-Type": "text/plain; charset=utf-8",
+      "Cache-Control": "no-store",
+      "Access-Control-Allow-Origin": "*",
+    },
   });
 }
 
 /** Fill the static `/img/` template with this repo's links and og tags. */
-export async function handlePage(request: Request, env: Env, url: URL, slug: ImageSlug): Promise<Response> {
-  const template = await env.ASSETS.fetch(new Request(new URL("/img/", url), { headers: request.headers }));
+export async function handlePage(
+  request: Request,
+  env: Env,
+  url: URL,
+  slug: ImageSlug,
+): Promise<Response> {
+  const template = await env.ASSETS.fetch(
+    new Request(new URL("/img/", url), { headers: request.headers }),
+  );
   if (!template.ok) return template;
-  const out = fillPage(template, { origin: url.origin, slug, fiddleOrigin: env.PCBFIDDLE_ORIGIN ?? DEFAULT_PCBFIDDLE_ORIGIN });
+  const out = fillPage(template, {
+    origin: url.origin,
+    slug,
+    fiddleOrigin: env.PCBFIDDLE_ORIGIN ?? DEFAULT_PCBFIDDLE_ORIGIN,
+  });
   out.headers.set("Cache-Control", CACHE_PAGE);
   return out;
 }
@@ -182,7 +232,8 @@ export async function handlePage(request: Request, env: Env, url: URL, slug: Ima
 /** The bare `/img/` picker: same template, but no board to point og:image at. */
 export async function handlePickerPage(request: Request, env: Env): Promise<Response> {
   const template = await env.ASSETS.fetch(request);
-  if (!template.ok || !(template.headers.get("content-type") ?? "").includes("text/html")) return template;
+  if (!template.ok || !(template.headers.get("content-type") ?? "").includes("text/html"))
+    return template;
   return new HTMLRewriter()
     .on('meta[property^="og:image"], meta[name="twitter:image"]', {
       element(el) {
@@ -211,6 +262,7 @@ export function fillPage(template: Response, fill: PageFill): Response {
   const pageUrl = origin + formatImagePath(slug);
   const imageUrl = origin + formatImagePath(slug, "jpg");
   const title = `${name} — 3D render · PCB23D`;
+  const imageAlt = `3D render of the ${name} PCB`;
   const description = `3D render of the ${slug.owner}/${slug.repo} KiCad board${slug.ref ? ` at ${slug.ref}` : ""}, drawn from the GitHub source.`;
   const github = `https://github.com/${encodeURIComponent(slug.owner)}/${encodeURIComponent(slug.repo)}${
     slug.ref ? `/tree/${slug.ref.split("/").map(encodeURIComponent).join("/")}` : ""
@@ -235,7 +287,10 @@ export function fillPage(template: Response, fill: PageFill): Response {
     .on('meta[property="og:image"]', attr("content", imageUrl))
     .on('meta[property="og:image:width"]', attr("content", String(OG_WIDTH)))
     .on('meta[property="og:image:height"]', attr("content", String(OG_HEIGHT)))
+    .on('meta[name="twitter:title"]', attr("content", title))
+    .on('meta[name="twitter:description"]', attr("content", description))
     .on('meta[name="twitter:image"]', attr("content", imageUrl))
+    .on('meta[property="og:image:alt"], meta[name="twitter:image:alt"]', attr("content", imageAlt))
     .on('link[rel="canonical"]', attr("href", pageUrl))
     .on('[data-slot="render"]', {
       element(el) {
@@ -247,7 +302,7 @@ export function fillPage(template: Response, fill: PageFill): Response {
     .on('[data-slot="image"]', {
       element(el) {
         el.setAttribute("src", imageUrl);
-        el.setAttribute("alt", `3D render of ${name}`);
+        el.setAttribute("alt", imageAlt);
       },
     })
     .on('[data-slot="github"]', attr("href", github))

@@ -22,7 +22,9 @@ import Base from "../../layouts/Base.astro";
         <img data-slot="image" id="board-image" alt="3D render of the board" decoding="async" />
         <figcaption class="stage-state" id="stage-state">
           <span class="spinner" aria-hidden="true"></span>
-          <em>Rendering from the GitHub source… the first render of a commit takes a few seconds.</em>
+          <em
+            >Rendering from the GitHub source… the first render of a commit takes a few seconds.</em
+          >
         </figcaption>
       </figure>
 
@@ -42,8 +44,9 @@ import Base from "../../layouts/Base.astro";
       <section class="share">
         <p class="kicker"><span></span> Share</p>
         <p class="share-lede">
-          Paste the page link anywhere that unfurls previews — Slack, X, Discord, GitHub issues — and the render shows up as
-          the card. The image link works on its own too, and is redrawn when the repo's default branch moves.
+          Paste the page link anywhere that unfurls previews — Slack, X, Discord, GitHub issues —
+          and the render shows up as the card. The image link works on its own too, and is redrawn
+          when the repo's default branch moves.
         </p>
         <div class="share-row">
           <span class="share-label">Page</span>
@@ -52,7 +55,8 @@ import Base from "../../layouts/Base.astro";
         </div>
         <div class="share-row">
           <span class="share-label">Image</span>
-          <code data-slot="image-url" id="image-url">https://pcbto3d.com/img/gh/owner/repo.jpg</code>
+          <code data-slot="image-url" id="image-url">https://pcbto3d.com/img/gh/owner/repo.jpg</code
+          >
           <button type="button" class="copy" data-copy="image-url">Copy</button>
         </div>
         <div class="share-row">
@@ -61,8 +65,12 @@ import Base from "../../layouts/Base.astro";
           <button type="button" class="copy" data-copy="markdown">Copy</button>
         </div>
         <p class="share-note">
-          Pin a commit with <code>/@&lt;sha&gt;</code> for an image that never changes; add <code>?view=top</code>,
-          <code>bottom</code>, or <code>front</code> to the image link for another angle, or swap <code>.jpg</code> for
+          Pin a commit with <code>/@&lt;sha&gt;</code> for an image that never changes; add <code
+            >?view=top</code
+          >,
+          <code>bottom</code>, or <code>front</code> to the image link for another angle, or swap <code
+            >.jpg</code
+          > for
           <code>.png</code>.
         </p>
       </section>
@@ -72,11 +80,19 @@ import Base from "../../layouts/Base.astro";
       <p class="kicker"><span></span> Link to a render</p>
       <h1>Any public KiCad board on GitHub, as a shareable 3D image.</h1>
       <p class="picker-lede">
-        <code>pcbto3d.com/img/gh/owner/repo</code> is a page with the render up top and an <code>og:image</code> set to it, so
-        the board shows up wherever the link is unfurled. The image is drawn once per commit and cached.
+        <code>pcbto3d.com/img/gh/owner/repo</code> is a page with the render up top and an <code
+          >og:image</code
+        > set to it, so the board shows up wherever the link is unfurled. The image is drawn once per
+        commit and cached.
       </p>
       <form class="picker-form" id="picker-form" autocomplete="off">
-        <input id="picker-input" name="repo" type="text" spellcheck="false" placeholder="github.com/owner/repo or owner/repo" />
+        <input
+          id="picker-input"
+          name="repo"
+          type="text"
+          spellcheck="false"
+          placeholder="github.com/owner/repo or owner/repo"
+        />
         <button type="submit" class="btn-primary">Render</button>
       </form>
       <p class="form-error" id="picker-error" hidden></p>
@@ -128,7 +144,8 @@ import Base from "../../layouts/Base.astro";
     chip.addEventListener("click", (event) => {
       if (!image) return;
       event.preventDefault();
-      for (const other of document.querySelectorAll("[data-view]")) other.classList.toggle("is-active", other === chip);
+      for (const other of document.querySelectorAll("[data-view]"))
+        other.classList.toggle("is-active", other === chip);
       stage?.classList.remove("is-loaded", "is-error");
       if (state) {
         state.innerHTML = '<span class="spinner" aria-hidden="true"></span><em>Rendering…</em>';
@@ -156,7 +173,10 @@ import Base from "../../layouts/Base.astro";
   const error = document.querySelector<HTMLElement>("#picker-error");
   form?.addEventListener("submit", (event) => {
     event.preventDefault();
-    const raw = (input?.value ?? "").trim().replace(/^https?:\/\//i, "").replace(/^(www\.)?github\.com\//i, "");
+    const raw = (input?.value ?? "")
+      .trim()
+      .replace(/^https?:\/\//i, "")
+      .replace(/^(www\.)?github\.com\//i, "");
     const m = /^([\w.-]+)\/([\w.-]+?)(?:\.git)?(?:\/tree\/([^\s]+))?\/?$/.exec(raw);
     if (!m) {
       if (error) {
@@ -322,7 +342,11 @@ import Base from "../../layouts/Base.astro";
   }
   .share-label {
     color: var(--muted);
-    font: 700 10px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace;
+    font:
+      700 10px/1.4 ui-monospace,
+      SFMono-Regular,
+      Menlo,
+      monospace;
     text-transform: uppercase;
     letter-spacing: 0.16em;
   }

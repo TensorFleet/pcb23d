@@ -30,7 +30,12 @@ export interface RenderSpec {
   format: ImageFormat;
 }
 
-export const OG_RENDER: RenderSpec = { view: DEFAULT_VIEW, width: OG_WIDTH, height: OG_HEIGHT, format: "jpg" };
+export const OG_RENDER: RenderSpec = {
+  view: DEFAULT_VIEW,
+  width: OG_WIDTH,
+  height: OG_HEIGHT,
+  format: "jpg",
+};
 
 export interface ImageSlug {
   owner: string;
@@ -56,7 +61,9 @@ export function isViewName(name: string): name is ViewName {
  * Parse `/img/gh/{owner}/{repo}[/@{ref}][.jpg|.png]`. Returns the slug and, when the path
  * ended in an image extension, the format; `null` for anything that is not a valid slug.
  */
-export function parseImagePath(pathname: string): { slug: ImageSlug; format: ImageFormat | null } | null {
+export function parseImagePath(
+  pathname: string,
+): { slug: ImageSlug; format: ImageFormat | null } | null {
   let path = pathname.replace(/\/+$/, "");
   let format: ImageFormat | null = null;
   const ext = /\.(jpe?g|png)$/i.exec(path);
@@ -81,7 +88,8 @@ export function parseImagePath(pathname: string): { slug: ImageSlug; format: Ima
     return null;
   }
   if (!OWNER_RE.test(owner) || !REPO_RE.test(repo) || repo === "." || repo === "..") return null;
-  if (ref !== undefined && (!REF_RE.test(ref) || ref.includes("..") || ref.endsWith("/"))) return null;
+  if (ref !== undefined && (!REF_RE.test(ref) || ref.includes("..") || ref.endsWith("/")))
+    return null;
   return { slug: ref ? { owner, repo, ref } : { owner, repo }, format };
 }
 
@@ -97,7 +105,12 @@ export function fiddlePath(slug: ImageSlug): string {
   return formatImagePath(slug).slice("/img".length);
 }
 
-export function renderObjectKey(owner: string, repo: string, sha: string, spec: RenderSpec): string {
+export function renderObjectKey(
+  owner: string,
+  repo: string,
+  sha: string,
+  spec: RenderSpec,
+): string {
   return `gh/${owner.toLowerCase()}/${repo.toLowerCase()}/${sha}/renders/${spec.view}-${spec.width}x${spec.height}-v${RENDER_VERSION}.${spec.format}`;
 }
 
@@ -134,9 +147,15 @@ export interface FiddleClient {
 export const DEFAULT_PCBFIDDLE_ORIGIN = "https://pcbfiddle.com";
 
 /** Talk to pcbFiddle's public clone-on-miss API. File URLs in the manifest are origin-relative. */
-export function fiddleClient(origin = DEFAULT_PCBFIDDLE_ORIGIN, f: typeof fetch = fetch): FiddleClient {
+export function fiddleClient(
+  origin = DEFAULT_PCBFIDDLE_ORIGIN,
+  f: typeof fetch = fetch,
+): FiddleClient {
   const base = origin.replace(/\/$/, "");
-  const headers = { "User-Agent": "pcb23d-render (+https://pcbto3d.com)", Accept: "application/json" };
+  const headers = {
+    "User-Agent": "pcb23d-render (+https://pcbto3d.com)",
+    Accept: "application/json",
+  };
   return {
     async manifest(slug) {
       const res = await f(`${base}/api${fiddlePath(slug)}`, { headers });
@@ -155,8 +174,11 @@ export function fiddleClient(origin = DEFAULT_PCBFIDDLE_ORIGIN, f: typeof fetch 
     async file(manifest, path) {
       const entry = manifest.files.find((file) => file.path === path);
       if (!entry) throw new FiddleError(`${path} is not in the snapshot`, 404);
-      const res = await f(new URL(entry.url, base).href, { headers: { "User-Agent": headers["User-Agent"] } });
-      if (!res.ok) throw new FiddleError(`could not read ${path} from pcbFiddle (${res.status})`, 502);
+      const res = await f(new URL(entry.url, base).href, {
+        headers: { "User-Agent": headers["User-Agent"] },
+      });
+      if (!res.ok)
+        throw new FiddleError(`could not read ${path} from pcbFiddle (${res.status})`, 502);
       return new Uint8Array(await res.arrayBuffer());
     },
   };

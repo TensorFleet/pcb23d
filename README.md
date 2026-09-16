@@ -126,14 +126,38 @@ Not rendered yet: inner layers, board edge plating. See [docs/architecture.md](d
 ## Web app
 
 `apps/web` is a static Astro site. Rendering happens in `src/lib/render.worker.ts`
-using the core package directly. `src/worker.ts` is the edge script: host redirects and
-the `/api/models/*` mesh cache (R2 bucket `pcb23d-models`). Deploy:
+using the core package directly. `src/worker.ts` is the edge script: host redirects, the
+`/api/models/*` mesh cache (R2 bucket `pcb23d-models`), and the shareable GitHub renders
+below. Deploy:
 
 ```bash
 bun run --cwd apps/web cf:dev             # local wrangler
 bun run --cwd apps/web deploy:staging     # pcb23d-staging.workers.dev
 bun run --cwd apps/web deploy:production  # pcbto3d.com custom domain (pcb23d.com redirects)
 ```
+
+## Shareable renders of GitHub boards
+
+```
+https://pcbto3d.com/img/gh/owner/repo          page: render up top, og:image set to it
+https://pcbto3d.com/img/gh/owner/repo.jpg      the 1200×630 render (also .png, ?view=top|bottom|front)
+https://pcbto3d.com/img/gh/owner/repo/@v1.2    pinned to a branch, tag, or commit
+```
+
+Paste the page link into Slack, X, Discord, or a GitHub issue and the board is the
+preview card. The board is fetched through [pcbfiddle.com](https://pcbfiddle.com)'s
+clone-on-miss API (so a repo is cloned once, without spending GitHub REST quota), rendered
+on the edge with library 3D models from `/api/models`, and stored in the R2 bucket the two
+sites share, next to the git snapshot:
+
+```
+fabplane-opensource/gh/{owner}/{repo}/{sha}/renders/angle-1200x630-v1.jpg
+```
+
+pcbFiddle serves that same object as the `og:image` of its `/gh/*` pages, so a commit is
+drawn once no matter which site asked first. Only `.kicad_pcb` boards render; Eagle and
+EasyEDA projects that pcbFiddle can view return 404 here. See `apps/web/src/edge/gh.ts`
+for the key contract (bump `RENDER_VERSION` on both sides when output changes).
 
 ## CI
 
