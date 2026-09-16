@@ -72,6 +72,19 @@ cache; `@<sha>` URLs are immutable, ref URLs re-resolve every few minutes.
 `/img/{gh|cb|gl}/{owner}/{repo}` is the static `/img/` page with its slots and og tags
 filled by `HTMLRewriter`.
 
+### Model sources, in order
+
+1. R2 mesh cache (`mesh/v2/<key>.bin`), seeded from a KiCad install's STEP library by
+   `seed-library-meshes.ts` and filled on demand.
+2. The 2020 GitHub WRL mirror, converted at the edge.
+3. The current STEP on GitLab, passed through to the client (`X-PCB23D-Model: step`) for
+   OpenCascade tessellation in the browser or CLI.
+4. Project files (`${KIPRJMOD}`, relative paths, or a same-named vendored copy).
+5. EasyEDA, for footprints tagged with an LCSC number (`/api/lcsc/<C>`): OBJ parsed and
+   normalised (XY centred, base at z = 0); placed on the KiCad pad-pattern centre plus
+   EasyEDA's model-to-pads delta, with a 90° turn when the two pad patterns are elongated
+   the other way.
+
 ## Mesh and rendering
 
 The outline (with holes) is triangulated by earcut for the top and bottom faces; every

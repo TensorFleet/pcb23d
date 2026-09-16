@@ -32,6 +32,13 @@ export interface EasyedaModelInfo {
   /** KiCad-style offset in mm and rotation in degrees for the normalised mesh. */
   offset: [number, number, number];
   rotate: [number, number, number];
+  /**
+   * Model centre relative to the centre of EasyEDA's own pad pattern (mm, KiCad model axes).
+   * Anchoring on pads survives footprints whose origin is not at the pad pattern.
+   */
+  delta: [number, number];
+  /** EasyEDA pad-pattern bounding box size in mm (x, y), when pads were present. */
+  padSize?: [number, number];
 }
 
 /** Pull the 3D model reference out of an EasyEDA `products/<C>/components` response. */
@@ -43,6 +50,19 @@ export function parseEasyedaComponent(json: unknown, lcsc: string): EasyedaModel
   const head = ds.head ?? {};
   const canvasX = Number(head.x ?? 0) || 0;
   const canvasY = Number(head.y ?? 0) || 0;
+  // pad pattern centre in canvas units: PAD~shape~x~y~...
+  let pMinX = Infinity, pMinY = Infinity, pMaxX = -Infinity, pMaxY = -Infinity;
+  for (const shape of ds.shape) {
+    if (!shape.startsWith("PAD~")) continue;
+    const f = shape.split("~");
+    const x = Number(f[2]), y = Number(f[3]);
+    if (!Number.isFinite(x) || !Number.isFinite(y)) continue;
+    if (x < pMinX) pMinX = x;
+    if (y < pMinY) pMinY = y;
+    if (x > pMaxX) pMaxX = x;
+    if (y > pMaxY) pMaxY = y;
+  }
+  const padCentre: [number, number] | null = Number.isFinite(pMinX) ? [(pMinX + pMaxX) / 2, (pMinY + pMaxY) / 2] : null;
   for (const shape of ds.shape) {
     if (!shape.startsWith("SVGNODE")) continue;
     const jsonStart = shape.indexOf("{");
@@ -77,12 +97,25 @@ export function parseEasyedaComponent(json: unknown, lcsc: string): EasyedaModel
       tx = 0;
       ty = 0;
     }
+    // model centre relative to EasyEDA's pad-pattern centre (falls back to the origin offset)
+    let dx = tx, dy = ty;
+    if (padCentre) {
+      const centre = outline ?? [Number(ox), Number(oy)];
+      dx = (centre[0] - padCentre[0]) * EASYEDA_CANVAS_MM;
+      dy = -(centre[1] - padCentre[1]) * EASYEDA_CANVAS_MM;
+      if (Math.abs(dx) > 100 || Math.abs(dy) > 100) {
+        dx = 0;
+        dy = 0;
+      }
+    }
     return {
       lcsc,
       uuid,
       title: attrs.title ?? lcsc,
       offset: [round(tx), round(ty), round(tz)],
       rotate: [Number(rx) || 0, Number(ry) || 0, Number(rz) || 0],
+      delta: [round(dx), round(dy)],
+      ...(padCentre ? { padSize: [round((pMaxX - pMinX) * EASYEDA_CANVAS_MM), round((pMaxY - pMinY) * EASYEDA_CANVAS_MM)] as [number, number] } : {}),
     };
   }
   return null;

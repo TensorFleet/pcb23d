@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { lcscFromProperties, parseEasyedaComponent, parseEasyedaObj } from "../src/models/easyeda";
-import { attachLcscModels } from "../src/models/lcsc";
+import { attachLcscModels, lcscQuarterTurn } from "../src/models/lcsc";
 import { encodeMesh } from "../src/models/mesh-format";
 import { buildScene, parseBoard } from "../src/index";
 
@@ -26,6 +26,13 @@ f 1 2 6 5
 `;
 
 describe("EasyEDA models", () => {
+  test("turns the model 90° when the two pad patterns are elongated the other way", () => {
+    const base = { lcsc: "C1", uuid: "", title: "", offset: [0, 0, 0] as [number, number, number], rotate: [0, 0, 0] as [number, number, number], delta: [0, 0] as [number, number] };
+    const comp = { padSize: [40, 4] as [number, number] } as unknown as import("../src/kicad/board").Component;
+    expect(lcscQuarterTurn(comp, { ...base, padSize: [4, 40] })).toBe(90);
+    expect(lcscQuarterTurn(comp, { ...base, padSize: [38, 5] })).toBe(0);
+    expect(lcscQuarterTurn(comp, base)).toBe(0);
+  });
   test("finds LCSC numbers under the property names JLC tooling uses", () => {
     expect(lcscFromProperties({ LCSC: "C134092" })).toBe("C134092");
     expect(lcscFromProperties({ "LCSC Part": " c8545 " })).toBe("C8545");
@@ -42,6 +49,7 @@ describe("EasyEDA models", () => {
     // this part's c_origin is bogus (hundreds of mm away); the SVG outline centre wins
     const sot = parseEasyedaComponent(await fixture("easyeda-C8545.json").json(), "C8545");
     expect(sot?.title).toContain("SOT-23");
+    expect(Math.abs(sot!.delta[0])).toBeLessThan(2);
     expect(Math.abs(sot!.offset[0])).toBeLessThan(2);
     expect(Math.abs(sot!.offset[1])).toBeLessThan(2);
   });
@@ -70,7 +78,7 @@ describe("EasyEDA models", () => {
       const url = String(input);
       calls.push(url);
       if (url.endsWith("/api/lcsc/C134092"))
-        return new Response(encodeMesh(mesh) as unknown as BodyInit, { headers: { "x-pcb23d-offset": "0.5,-0.25,-1", "x-pcb23d-rotate": "0,0,180", "x-pcb23d-title": "USB-C" } });
+        return new Response(encodeMesh(mesh) as unknown as BodyInit, { headers: { "x-pcb23d-offset": "0.5,-0.25,-1", "x-pcb23d-rotate": "0,0,180", "x-pcb23d-delta": "0.1,0.2", "x-pcb23d-title": "USB-C" } });
       if (url.endsWith("/api/lcsc/C999999")) return new Response("", { status: 404, headers: { "x-pcb23d-model": "missing" } });
       return new Response("", { status: 500 });
     }) as unknown as typeof fetch;
@@ -79,7 +87,8 @@ describe("EasyEDA models", () => {
     expect(attached).toBe(1);
     expect(models.has("lcsc:C134092")).toBe(true);
     const ref = board.components[0]!.models.find((m) => m.key === "lcsc:C134092")!;
-    expect(ref.offset).toEqual([0.5, -0.25, -1]);
+    // anchored on the pad centre (single pad at local -3,0) plus EasyEDA's delta, z from EasyEDA
+    expect(ref.offset).toEqual([-2.9, 0.2, -1]);
     expect(ref.rotate).toEqual([0, 0, 180]);
     const scene = buildScene(board, { models });
     // the USB-C box is replaced by the OBJ mesh: its pin colour appears as a material

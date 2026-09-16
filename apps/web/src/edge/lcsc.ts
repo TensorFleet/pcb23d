@@ -7,7 +7,7 @@ import { easyedaComponentUrl, easyedaModelUrl, encodeMesh, parseEasyedaComponent
 import { CORS } from "./models";
 import { edgeCache, type Env, type ExecutionContextLike } from "./env";
 
-const LCSC_VERSION = "v2";
+const LCSC_VERSION = "v4";
 const UA = { "User-Agent": "pcb23d-model-cache (+https://pcbto3d.com)" };
 
 export async function handleLcsc(request: Request, env: Env, ctx: ExecutionContextLike, url: URL): Promise<Response> {
@@ -28,7 +28,9 @@ export async function handleLcsc(request: Request, env: Env, ctx: ExecutionConte
       const meta = obj.customMetadata ?? {};
       if (meta.missing === "1" && Date.now() - Number(meta.missingAt ?? 0) < 7 * 86400_000) return missing(lcsc);
       if (meta.missing !== "1") {
-        const res = meshResponse(await obj.arrayBuffer(), { lcsc, uuid: meta.uuid ?? "", title: meta.title ?? lcsc, offset: parseTriple(meta.offset), rotate: parseTriple(meta.rotate) }, "r2");
+        const d = parseTriple(meta.delta);
+        const ps = meta.padSize ? parseTriple(meta.padSize) : undefined;
+        const res = meshResponse(await obj.arrayBuffer(), { lcsc, uuid: meta.uuid ?? "", title: meta.title ?? lcsc, offset: parseTriple(meta.offset), rotate: parseTriple(meta.rotate), delta: [d[0], d[1]], ...(ps ? { padSize: [ps[0], ps[1]] as [number, number] } : {}) }, "r2");
         ctx.waitUntil(cache.put(cacheKey, res.clone()));
         return res;
       }
@@ -53,7 +55,7 @@ export async function handleLcsc(request: Request, env: Env, ctx: ExecutionConte
     ctx.waitUntil(
       env.MODELS.put(objectKey, bytes, {
         httpMetadata: { contentType: "application/octet-stream" },
-        customMetadata: { uuid: info.uuid, title: info.title.slice(0, 120), offset: info.offset.join(","), rotate: info.rotate.join(","), source: easyedaModelUrl(info.uuid) },
+        customMetadata: { uuid: info.uuid, title: info.title.slice(0, 120), offset: info.offset.join(","), rotate: info.rotate.join(","), delta: info.delta.join(","), ...(info.padSize ? { padSize: info.padSize.join(",") } : {}), source: easyedaModelUrl(info.uuid) },
       }),
     );
   }
@@ -71,12 +73,14 @@ function meshResponse(body: ArrayBuffer | Uint8Array, info: EasyedaModelInfo, so
   return new Response(body as BodyInit, {
     headers: {
       ...CORS,
-      "Access-Control-Expose-Headers": "X-PCB23D-Model, X-PCB23D-Offset, X-PCB23D-Rotate, X-PCB23D-Title, X-PCB23D-Uuid",
+      "Access-Control-Expose-Headers": "X-PCB23D-Model, X-PCB23D-Offset, X-PCB23D-Rotate, X-PCB23D-Delta, X-PCB23D-PadSize, X-PCB23D-Title, X-PCB23D-Uuid",
       "Content-Type": "application/octet-stream",
       "Cache-Control": "public, max-age=2592000",
       "X-PCB23D-Model": source,
       "X-PCB23D-Offset": info.offset.join(","),
       "X-PCB23D-Rotate": info.rotate.join(","),
+      "X-PCB23D-Delta": info.delta.join(","),
+      ...(info.padSize ? { "X-PCB23D-PadSize": info.padSize.join(",") } : {}),
       "X-PCB23D-Title": encodeURIComponent(info.title),
       "X-PCB23D-Uuid": info.uuid,
     },

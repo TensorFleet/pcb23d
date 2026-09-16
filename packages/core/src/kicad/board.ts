@@ -60,6 +60,10 @@ export interface Component {
   outline: Ring;
   /** Footprint properties (Reference, Value, LCSC, MPN, ...). */
   properties: Record<string, string>;
+  /** Centre of the copper pad pattern in footprint-local KiCad coordinates (y down). */
+  padCentre?: Vec2;
+  /** Size of the pad pattern's bounding box in footprint-local axes (mm). */
+  padSize?: [number, number];
   /** 3D model references from the footprint, in file order. */
   models: ModelRef[];
   /** True when no body box should be drawn if the model is unavailable (test points, holes). */
@@ -448,6 +452,12 @@ class ParseContext {
       height,
       outline,
       properties,
+      ...(boundsValid(padBounds)
+        ? {
+            padCentre: { x: (padBounds.minX + padBounds.maxX) / 2, y: (padBounds.minY + padBounds.maxY) / 2 },
+            padSize: [padBounds.maxX - padBounds.minX, padBounds.maxY - padBounds.minY] as [number, number],
+          }
+        : {}),
       models,
       // a box only makes sense when the footprint has a real body footprint
       ...(bodiless ? { boxless: true } : {}),

@@ -47,8 +47,9 @@ and the path of every PNG written. Exit code 0 on success, 1 if any input failed
     --no-components                                     # bare board, no bodies
     --no-models                                         # boxes instead of KiCad library 3D models (offline)
 
-Components use the KiCad library's 3D models (fetched from pcbto3d.com's mesh cache or GitHub,
-cached under ~/.cache/pcb23d). Project-local models (${KIPRJMOD}) are read from the project: .wrl/.wrz directly, .step via
+Components use the KiCad library's 3D models (pcbto3d.com's pre-seeded mesh cache, then GitHub
+or GitLab, cached under ~/.cache/pcb23d) and EasyEDA models for footprints tagged with an LCSC
+part number (--no-lcsc to skip). Project-local models (${KIPRJMOD}) are read from the project: .wrl/.wrz directly, .step via
 OpenCascade WASM (downloaded once, 7 MB, to ~/.cache/pcb23d/occt; --no-step skips it).
 Footprints with no usable model are drawn as boxes sized from their fab outline. Only the outer copper layers are visible. GitHub inputs use the anonymous
 API (60 requests/hour) unless GITHUB_TOKEN is set.

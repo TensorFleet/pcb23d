@@ -28,7 +28,7 @@ export { modelKey, isValidModelKey, modelRawUrl, modelStepUrl, modelApiUrl, fetc
 export { assignProjectModelKeys, projectModelPath, joinProjectPath, isProjectKey, PROJECT_KEY_PREFIX, DEFAULT_LCSC_API } from "./models/refs";
 export { lcscFromProperties, parseEasyedaComponent, parseEasyedaObj, fetchEasyedaModel, easyedaComponentUrl, easyedaModelUrl, LCSC_KEY_PREFIX } from "./models/easyeda";
 export type { EasyedaModelInfo } from "./models/easyeda";
-export { attachLcscModels, fetchLcscModel, lcscCandidates } from "./models/lcsc";
+export { attachLcscModels, fetchLcscModel, lcscCandidates, lcscOffset, lcscQuarterTurn } from "./models/lcsc";
 export { projectFromSource, boardDir } from "./input";
 export { githubProject } from "./github";
 export type { ProjectFiles } from "./models/refs";

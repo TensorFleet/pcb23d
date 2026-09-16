@@ -38,6 +38,7 @@ pcb23d *.kicad_pcb -o renders --json          # batch, machine-readable summary
 pcb23d hat.kicad_pcb --views hero=45/30/persp --bg "#ffffff" -w 2400 -h 1800
 pcb23d board.zip --no-models                  # offline: boxes instead of library models
 pcb23d board.zip --no-step                    # skip OpenCascade STEP tessellation
+pcb23d board.zip --no-lcsc                    # skip EasyEDA lookups for LCSC-tagged parts
 ```
 
 3D models are converted meshes cached under `~/.cache/pcb23d/models`; the first render of
@@ -104,10 +105,15 @@ a 1600×1200 view takes a few hundred milliseconds).
   per-via overrides), silkscreen graphics and text (KiCad's Newstroke font, with
   justification, mirroring, rotation, italic), and drill holes (round and slots).
 - Components from their real KiCad library 3D models: the footprint's
-  `(model ...)` reference is mapped to the library's WRL mesh, fetched from
-  `pcbto3d.com/api/models` (a Cloudflare Worker that converts the VRML once and
-  caches the compact mesh in R2) or straight from the GitHub mirror of
-  kicad-packages3D, then placed with KiCad's offset/scale/rotate semantics.
+  `(model ...)` reference is mapped to a library key and fetched from
+  `pcbto3d.com/api/models`, a Cloudflare Worker backed by an R2 cache that is
+  pre-seeded from the current official library (7251 STEP parts tessellated with
+  OpenCascade, colours per face). Keys not yet cached fall back to the 2020
+  GitHub WRL mirror, then to the current STEP on GitLab handed to the client to
+  tessellate. Placement uses KiCad's offset/scale/rotate semantics.
+- Footprints with an `LCSC` / `LCSC Part` / `JLCPCB Part` property and no usable
+  model get EasyEDA's part model through `pcbto3d.com/api/lcsc/<C-number>`,
+  anchored on the footprint's pad pattern (`--no-lcsc` to skip).
   Footprints without a library model fall back to a box from the `F.Fab` outline
   (or courtyard, or pads) with a height from IPC-7351 names or package families.
   Mounting holes, test points, and fiducials without models are skipped.
@@ -161,6 +167,13 @@ pages, so a commit is drawn once no matter which site asked first. Only `.kicad_
 boards render; Eagle and EasyEDA projects that pcbFiddle can view return 404 here. See
 `apps/web/src/edge/gh.ts` for the key contract (bump `RENDER_VERSION` on both sides when
 output changes).
+
+## Refreshing the model cache
+
+`apps/cli/scripts/seed-library-meshes.ts <KiCad>/3dmodels` tessellates every STEP in a KiCad
+install's library and uploads the meshes with `PUT /api/models/<key>` (secret
+`MODELS_ADMIN_TOKEN`, read from `~/.config/pcb23d/models-admin-token`). Rerun it after a KiCad
+release; it resumes from `seed-progress.log`.
 
 ## CI
 
