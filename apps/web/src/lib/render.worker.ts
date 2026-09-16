@@ -1,9 +1,27 @@
 /// <reference lib="webworker" />
-import { buildScene, encodePng, fetchModels, modelKeys, parseBoard, readBoardSource, renderMesh, resolveView, type Board, type ModelMesh, type Scene } from "pcb23d";
+import {
+  assignProjectModelKeys,
+  boardDir,
+  buildScene,
+  encodePng,
+  fetchModels,
+  githubProject,
+  modelKeys,
+  parseBoard,
+  projectFromSource,
+  readBoardSource,
+  renderMesh,
+  resolveView,
+  type Board,
+  type ModelMesh,
+  type ProjectFiles,
+  type Scene,
+} from "pcb23d";
 import type { RenderRequest, WorkerMessage } from "./protocol";
 
 let board: Board | null = null;
 let boardPath = "";
+let project: ProjectFiles | undefined;
 let scene: Scene | null = null;
 let sceneKey = "";
 /** Converted models, kept for the life of the worker (keys are library paths). */
@@ -24,6 +42,10 @@ async function handle(req: RenderRequest): Promise<void> {
       const source = readBoardSource(new Uint8Array(req.bytes), req.fileName);
       board = parseBoard(source.text);
       boardPath = source.path;
+      project = req.project
+        ? githubProject({ owner: req.project.owner, repo: req.project.repo }, req.project.ref, req.project.paths)
+        : projectFromSource(source);
+      assignProjectModelKeys(board.components, boardDir(source.path));
       scene = null;
       sceneKey = "";
       const b = board.bounds;
@@ -53,6 +75,7 @@ async function handle(req: RenderRequest): Promise<void> {
         const fetched = await fetchModels(wanted, {
           apiBase: `${self.location.origin}/api/models`,
           concurrency: 6,
+          ...(project ? { project } : {}),
           onProgress: (done, total) => post({ type: "models", id: req.id, done, total }),
         });
         for (const k of wanted) {

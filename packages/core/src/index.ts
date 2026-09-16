@@ -8,10 +8,10 @@
  * ```
  */
 import { buildPalette, type Palette, type RGB, parseColor } from "./color";
-import { readBoardSource, type BoardSource } from "./input";
+import { boardDir, projectFromSource, readBoardSource, type BoardSource } from "./input";
 import { parseBoard, type Board, type BoardStats, type Component, type Hole } from "./kicad/board";
 import { buildMesh, type Mesh } from "./mesh";
-import { fetchModels, type ModelFetchOptions } from "./models/refs";
+import { assignProjectModelKeys, fetchModels, type ModelFetchOptions } from "./models/refs";
 import type { ModelMesh } from "./models/vrml";
 import { encodePng } from "./png";
 import { renderMesh, resolveView, VIEWS, type RenderOptions, type RgbaImage, type ViewName, type ViewSpec } from "./render";
@@ -24,6 +24,10 @@ export { parseGithubUrl, fetchGithubBoard, fetchRemoteBoard, isRemoteInput } fro
 export { parseVrml } from "./models/vrml";
 export { encodeMesh, decodeMesh } from "./models/mesh-format";
 export { modelKey, isValidModelKey, modelRawUrl, modelApiUrl, fetchModel, fetchModels, DEFAULT_MODEL_API, KICAD_PACKAGES3D_RAW } from "./models/refs";
+export { assignProjectModelKeys, projectModelPath, joinProjectPath, isProjectKey, PROJECT_KEY_PREFIX } from "./models/refs";
+export { projectFromSource, boardDir } from "./input";
+export { githubProject } from "./github";
+export type { ProjectFiles } from "./models/refs";
 export type { ModelMesh, MeshGroup } from "./models/vrml";
 export type { ModelRef, ModelFetcher, ModelFetchOptions } from "./models/refs";
 export type { GithubRef, RemoteBoard, FetchOptions } from "./github";
@@ -132,7 +136,13 @@ export async function renderPcb(input: Uint8Array | string, options: RenderPcbOp
   if (!want || options.models || options.components === false) return renderPcbSync(input, options);
   const source = readBoardSource(input, options.fileName);
   const board = parseBoard(source.text);
-  const models = await fetchModels(modelKeys(board), typeof want === "object" ? want : {});
+  assignProjectModelKeys(board.components, boardDir(source.path));
+  const fetchOpts: ModelFetchOptions = typeof want === "object" ? { ...want } : {};
+  if (!fetchOpts.project) {
+    const project = projectFromSource(source);
+    if (project) fetchOpts.project = project;
+  }
+  const models = await fetchModels(modelKeys(board), fetchOpts);
   return renderPcbSync(source.text, { ...options, models, fileName: source.path, sourcePaths: source.archivePaths });
 }
 
@@ -141,6 +151,7 @@ export function renderPcbSync(input: Uint8Array | string, options: RenderPcbOpti
   const source = readBoardSource(input, options.fileName);
   if (options.sourcePaths) source.archivePaths = options.sourcePaths;
   const board = parseBoard(source.text);
+  assignProjectModelKeys(board.components, boardDir(source.path));
   const t1 = now();
   const scene = buildScene(board, options);
   const t2 = now();

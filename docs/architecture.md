@@ -52,6 +52,10 @@ stores. `fetchModels` asks `/api/models/<key>` first (Worker: R2 `mesh/v1/<key>.
 fetch the WRL from the GitHub mirror, convert, store) and falls back to parsing the WRL in the
 client. `mesh.ts` places a model with KiCad's order — scale, rotate X/Y/Z (negated), offset,
 footprint rotation, 180° about X for back-side parts — or draws the box when no model exists.
+`${KIPRJMOD}` and relative model paths get `project:` keys relative to the board's directory
+and are read through a `ProjectFiles` reader: the zip contents, `raw.githubusercontent.com`
+for GitHub boards, or the local directory in the CLI. A vendored `X.3dshapes/Y.step` without a
+WRL falls back to the library's copy.
 
 ## Mesh and rendering
 
@@ -71,6 +75,6 @@ runs it in a Worker and streams each view as it finishes.
 ## Known gaps
 
 - Silkscreen and fab text is not drawn (needs a stroke font).
-- Project-local models (`${KIPRJMOD}/...`) are not fetched; boxes stand in.
+- Project-local models need a WRL/WRZ next to the referenced STEP; STEP itself is not parsed.
 - Inner copper layers are parsed but not visible; only outer faces are textured.
 - Holes are see-through with no barrel walls.

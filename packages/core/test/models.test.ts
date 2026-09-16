@@ -12,6 +12,7 @@ describe("modelKey", () => {
     expect(modelKey("${KICAD10_3DMODEL_DIR}/Package_TO_SOT_SMD.3dshapes/SOT-23.step")).toBe("Package_TO_SOT_SMD.3dshapes/SOT-23.wrl");
     expect(modelKey("${KISYS3DMOD}/Capacitor_SMD.3dshapes/C_0603_1608Metric.wrl")).toBe("Capacitor_SMD.3dshapes/C_0603_1608Metric.wrl");
     expect(modelKey("${KIPRJMOD}/models/MyPart.step")).toBeUndefined();
+    expect(modelKey("${KIPRJMOD}/lib/3dmodels/Button_Switch_SMD.3dshapes/SW.STEP")).toBeUndefined();
     expect(modelKey("../3d/custom.wrl")).toBeUndefined();
     expect(modelRawUrl("Resistor_SMD.3dshapes/R_0402_1005Metric.wrl")).toContain("KiCad/kicad-packages3D/master/Resistor_SMD.3dshapes/R_0402_1005Metric.wrl");
   });
@@ -91,5 +92,30 @@ describe("models in a board", () => {
     expect(models.size).toBe(1);
     expect(calls[0]).toContain("/api/models/Resistor_SMD.3dshapes/R_0402_1005Metric.wrl");
     expect(calls[1]).toContain("raw.githubusercontent.com");
+  });
+});
+
+describe("project-local models", () => {
+  test("resolves ${KIPRJMOD} paths against the zip and prefers the WRL twin of a STEP", async () => {
+    const { zipSync } = await import("fflate");
+    const { renderPcb, projectModelPath, joinProjectPath } = await import("../src/index");
+    expect(projectModelPath("${KIPRJMOD}/models/Part.step")).toBe("models/Part.step");
+    expect(projectModelPath("../lib/3d/x.wrl")).toBe("../lib/3d/x.wrl");
+    expect(projectModelPath("${KICAD9_3DMODEL_DIR}/R.3dshapes/x.wrl")).toBeUndefined();
+    expect(joinProjectPath("hw/rev2", "../lib/x.wrl")).toBe("hw/lib/x.wrl");
+    const wrl = await fixture("R_0402_1005Metric.wrl");
+    const board = `(kicad_pcb (version 20241229) (layers (0 "F.Cu" signal) (31 "B.Cu" signal))
+      (footprint "Custom:Part" (layer "F.Cu") (at 10 10 0)
+        (fp_rect (start -0.5 -0.25) (end 0.5 0.25) (stroke (width 0.1) (type solid)) (fill no) (layer "F.Fab"))
+        (pad "1" smd rect (at -0.5 0) (size 0.5 0.5) (layers "F.Cu" "F.Mask"))
+        (model "\${KIPRJMOD}/models/Part.step"))
+      (gr_rect (start 0 0) (end 40 20) (layer "Edge.Cuts") (stroke (width 0.1) (type solid)) (fill no)))`;
+    const enc = new TextEncoder();
+    const zip = zipSync({ "hw/board.kicad_pcb": enc.encode(board), "hw/models/Part.STEP": enc.encode("ISO-10303"), "hw/models/Part.wrl": enc.encode(wrl) });
+    const offline = (async () => new Response("", { status: 500 })) as unknown as typeof fetch;
+    const res = await renderPcb(zip, { views: ["top"], width: 64, height: 48, supersample: 1, png: false, fetchModels: { fetch: offline, apiBase: "" } });
+    expect(res.board.modelsUsed).toBe(1);
+    const noModels = await renderPcb(zip, { views: ["top"], width: 64, height: 48, supersample: 1, png: false, fetchModels: false });
+    expect(noModels.board.modelsUsed).toBe(0);
   });
 });

@@ -4,6 +4,7 @@
  */
 import { unzipSync } from "fflate";
 import { kicadKind, pickMainDocument } from "./kicad/files";
+import type { ProjectFiles } from "./models/refs";
 
 export interface BoardSource {
   /** Path inside the archive, or the given file name. */
@@ -11,6 +12,20 @@ export interface BoardSource {
   text: string;
   /** Every path that was in the archive (empty for a bare board). */
   archivePaths: string[];
+  /** Archive contents when the input was a zip, for project-local 3D models. */
+  files?: Record<string, Uint8Array>;
+}
+
+/** Project-file reader for a zip source (undefined for bare boards). */
+export function projectFromSource(source: BoardSource): ProjectFiles | undefined {
+  const files = source.files;
+  if (!files) return undefined;
+  return { paths: source.archivePaths, read: async (path) => files[path] ?? null };
+}
+
+export function boardDir(path: string): string {
+  const i = path.lastIndexOf("/");
+  return i < 0 ? "" : path.slice(0, i);
 }
 
 const ZIP_MAGIC = [0x50, 0x4b];
@@ -52,7 +67,7 @@ export function readBoardSource(input: Uint8Array | string, fileName = "board.ki
         `no .kicad_pcb found in the archive (${paths.length} files${hint.length ? `; KiCad files: ${hint.join(", ")}` : ""})`,
       );
     }
-    return { path, text: new TextDecoder().decode(files[path]!), archivePaths: paths };
+    return { path, text: new TextDecoder().decode(files[path]!), archivePaths: paths, files };
   }
   return { path: fileName, text: new TextDecoder().decode(input), archivePaths: [] };
 }

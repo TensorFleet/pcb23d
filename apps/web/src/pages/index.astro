@@ -216,8 +216,8 @@ and the path of every PNG written. Exit code 0 on success, 1 if any input failed
     --no-models                                         # boxes instead of KiCad library 3D models (offline)
 
 Components use the KiCad library's 3D models (fetched from pcbto3d.com's mesh cache or GitHub,
-cached under ~/.cache/pcb23d). Footprints without a library model, or project-local models,
-are drawn as boxes sized from their fab outline. Only the outer copper layers are visible. GitHub inputs use the anonymous
+cached under ~/.cache/pcb23d). Project-local models ($&#123;KIPRJMOD&#125;) are read from the project when a .wrl/.wrz exists next to
+the .step. Footprints with no usable model are drawn as boxes sized from their fab outline. Only the outer copper layers are visible. GitHub inputs use the anonymous
 API (60 requests/hour) unless GITHUB_TOKEN is set.
 </pre>
     </section>
@@ -259,7 +259,7 @@ pcb23d hat.kicad_pcb --views hero=45/30 --bg #ffffff</code></pre>
 
 <script>
   import { zipSync } from "fflate";
-  import { fetchRemoteBoard, isRemoteInput } from "pcb23d";
+  import { fetchRemoteBoard, isRemoteInput, parseGithubUrl } from "pcb23d";
   import type { RenderRequest, WorkerMessage, BoardSummary } from "../lib/protocol";
 
   const $ = <T extends Element>(sel: string) => document.querySelector<T>(sel)!;
@@ -337,6 +337,7 @@ pcb23d hat.kicad_pcb --views hero=45/30 --bg #ffffff</code></pre>
     return [w ?? 1600, h ?? 1200];
   }
 
+  let pendingProject: RenderRequest["project"] | undefined;
   function send(views: RenderRequest["views"], bytes?: ArrayBuffer, fileName?: string) {
     const [width, height] = size();
     const req: RenderRequest = {
@@ -344,6 +345,7 @@ pcb23d hat.kicad_pcb --views hero=45/30 --bg #ffffff</code></pre>
       id: ++requestId,
       ...(bytes ? { bytes } : {}),
       ...(fileName ? { fileName } : {}),
+      ...(bytes && pendingProject ? { project: pendingProject } : {}),
       views,
       width,
       height,
@@ -425,14 +427,14 @@ pcb23d hat.kicad_pcb --views hero=45/30 --bg #ffffff</code></pre>
       showError("Please drop a .zip of a KiCad project or a .kicad_pcb file.");
       return;
     }
-    stem = name.replace(/\.(zip|kicad_pcb)$/i, "");
+    stem = (name.split("/").pop() ?? name).replace(/\.(zip|kicad_pcb)$/i, "");
     for (const img of images.values()) URL.revokeObjectURL(img.url);
     images.clear();
     board = null;
     active = "angle";
     preferred = "angle";
     result.hidden = false;
-    resultTitle.textContent = name;
+    resultTitle.textContent = name.split("/").pop() ?? name;
     resultMeta.textContent = "";
     preview.removeAttribute("src");
     previewInfo.textContent = "";
@@ -440,6 +442,7 @@ pcb23d hat.kicad_pcb --views hero=45/30 --bg #ffffff</code></pre>
     tabs.replaceChildren();
     result.scrollIntoView({ behavior: "smooth", block: "start" });
     send(STANDARD_VIEWS, await file.arrayBuffer(), name);
+    pendingProject = undefined;
   }
 
   async function openUrl(raw: string) {
@@ -454,8 +457,11 @@ pcb23d hat.kicad_pcb --views hero=45/30 --bg #ffffff</code></pre>
     errorEl.hidden = true;
     try {
       const remote = await fetchRemoteBoard(input);
-      const name = remote.path.split("/").pop() || "board.kicad_pcb";
-      await openFile(new File([remote.bytes as BlobPart], name));
+      const gh = parseGithubUrl(input);
+      pendingProject =
+        gh && remote.ref ? { owner: gh.owner, repo: gh.repo, ref: remote.ref, paths: remote.archivePaths } : undefined;
+      // keep the repo-relative path so ${KIPRJMOD} models resolve against the right directory
+      await openFile(new File([remote.bytes as BlobPart], remote.path));
       history.replaceState(null, "", `#url=${encodeURIComponent(input)}`);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);

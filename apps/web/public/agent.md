@@ -48,6 +48,6 @@ and the path of every PNG written. Exit code 0 on success, 1 if any input failed
     --no-models                                         # boxes instead of KiCad library 3D models (offline)
 
 Components use the KiCad library's 3D models (fetched from pcbto3d.com's mesh cache or GitHub,
-cached under ~/.cache/pcb23d). Footprints without a library model, or project-local models,
-are drawn as boxes sized from their fab outline. Only the outer copper layers are visible. GitHub inputs use the anonymous
+cached under ~/.cache/pcb23d). Project-local models (${KIPRJMOD}) are read from the project when a .wrl/.wrz exists next to
+the .step. Footprints with no usable model are drawn as boxes sized from their fab outline. Only the outer copper layers are visible. GitHub inputs use the anonymous
 API (60 requests/hour) unless GITHUB_TOKEN is set.

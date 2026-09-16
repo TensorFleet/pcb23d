@@ -5,6 +5,7 @@
  */
 import { pickBoardPath } from "./input";
 import { kicadKind } from "./kicad/files";
+import type { ProjectFiles } from "./models/refs";
 
 export interface GithubRef {
   owner: string;
@@ -24,6 +25,19 @@ export interface RemoteBoard {
   url: string;
   ref?: string;
   archivePaths: string[];
+  /** Reader for other files in the repo (project-local 3D models). */
+  project?: ProjectFiles;
+}
+
+/** Project reader over a GitHub repo at a ref, reading files from raw.githubusercontent.com. */
+export function githubProject(ref: GithubRef, gitRef: string, paths: string[], f: typeof fetch = fetch): ProjectFiles {
+  return {
+    paths,
+    read: async (path) => {
+      const res = await f(rawUrl(ref, gitRef, path));
+      return res.ok ? new Uint8Array(await res.arrayBuffer()) : null;
+    },
+  };
 }
 
 const GITHUB_HOSTS = new Set(["github.com", "www.github.com"]);
@@ -129,14 +143,19 @@ export async function fetchGithubBoard(ref: GithubRef, opts: FetchOptions = {}):
   }
   const out = await rawFile(f, ref, gitRef, board);
   out.archivePaths = paths;
+  out.project = githubProject(ref, gitRef, paths, f);
   return out;
 }
 
-async function rawFile(f: typeof fetch, ref: GithubRef, gitRef: string, path: string): Promise<RemoteBoard> {
-  const url = `https://raw.githubusercontent.com/${ref.owner}/${ref.repo}/${encodeURIComponent(gitRef)}/${path
+function rawUrl(ref: GithubRef, gitRef: string, path: string): string {
+  return `https://raw.githubusercontent.com/${ref.owner}/${ref.repo}/${encodeURIComponent(gitRef)}/${path
     .split("/")
     .map(encodeURIComponent)
     .join("/")}`;
+}
+
+async function rawFile(f: typeof fetch, ref: GithubRef, gitRef: string, path: string): Promise<RemoteBoard> {
+  const url = rawUrl(ref, gitRef, path);
   const res = await f(url);
   if (!res.ok) throw new Error(`could not download ${path} (${res.status})`);
   return { bytes: new Uint8Array(await res.arrayBuffer()), path, url, ref: gitRef, archivePaths: [] };

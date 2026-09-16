@@ -16,6 +16,8 @@ export interface RenderRequest {
   /** New board bytes; omit to reuse the board the worker already parsed. */
   bytes?: ArrayBuffer;
   fileName?: string;
+  /** When the board came from GitHub: where to read project-local 3D models from. */
+  project?: { owner: string; repo: string; ref: string; paths: string[] };
   views: { name: string; spec: ViewName | ViewSpec }[];
   width: number;
   height: number;

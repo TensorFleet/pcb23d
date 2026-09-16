@@ -113,8 +113,11 @@ a 1600×1200 view takes a few hundred milliseconds).
 - Stackup colours: `(color "Green")` on `F.Mask`/`F.SilkS` and `copper_finish`
   set the defaults.
 
-Not rendered yet: project-local (`${KIPRJMOD}`) models, inner layers, board edge
-plating. See [docs/architecture.md](docs/architecture.md). Deployment and domains: [docs/cloudflare.md](docs/cloudflare.md).
+Project-local models (`${KIPRJMOD}/...` or relative paths) are read from the
+zip, the GitHub repo, or the board's directory when a WRL/WRZ twin of the
+referenced file exists; STEP-only project models still fall back to boxes.
+
+Not rendered yet: inner layers, board edge plating. See [docs/architecture.md](docs/architecture.md). Deployment and domains: [docs/cloudflare.md](docs/cloudflare.md).
 
 ## Web app
 

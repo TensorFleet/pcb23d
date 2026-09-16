@@ -1,8 +1,8 @@
 #!/usr/bin/env bun
-import { mkdir } from "node:fs/promises";
+import { mkdir, readdir } from "node:fs/promises";
 import { homedir } from "node:os";
-import { basename, dirname, join } from "node:path";
-import { fetchRemoteBoard, isRemoteInput, parseBackground, renderPcb, type ModelFetchOptions } from "pcb23d";
+import { basename, dirname, join, relative, resolve } from "node:path";
+import { fetchRemoteBoard, isRemoteInput, parseBackground, renderPcb, type ModelFetchOptions, type ProjectFiles } from "pcb23d";
 import { parseArgs, USAGE } from "./args";
 
 declare const PCB23D_VERSION: string | undefined;
@@ -34,6 +34,7 @@ async function main(argv: string[]): Promise<number> {
   for (const input of opts.inputs) {
     let bytes: Uint8Array;
     let fileName = basename(input);
+    let project: ProjectFiles | undefined;
     const started = performance.now();
     try {
       if (isRemoteInput(input)) {
@@ -41,12 +42,15 @@ async function main(argv: string[]): Promise<number> {
           ...(process.env.GITHUB_TOKEN ? { token: process.env.GITHUB_TOKEN } : {}),
         });
         bytes = remote.bytes;
-        fileName = basename(remote.path);
+        fileName = remote.path; // repo-relative, so ${KIPRJMOD} models resolve
+        project = remote.project;
         if (!opts.quiet && !opts.json) console.error(`${input}: fetched ${remote.path}${remote.ref ? ` @${remote.ref}` : ""}`);
       } else {
         const file = Bun.file(input);
         if (!(await file.exists())) throw new Error("no such file");
         bytes = new Uint8Array(await file.arrayBuffer());
+        // a bare .kicad_pcb: its project models live next to it on disk
+        if (/\.kicad_pcb$/i.test(input) && opts.models) project = await localProject(dirname(resolve(input)));
       }
     } catch (error) {
       failures++;
@@ -54,10 +58,10 @@ async function main(argv: string[]): Promise<number> {
       summaries.push({ input, error: (error as Error).message });
       continue;
     }
-    const stem = fileName.replace(/\.(zip|kicad_pcb)$/i, "") || "board";
+    const stem = basename(fileName).replace(/\.(zip|kicad_pcb)$/i, "") || "board";
     try {
       const result = await renderPcb(bytes, {
-        fetchModels: opts.models ? modelFetchOptions(opts.modelsUrl, opts.quiet || opts.json) : false,
+        fetchModels: opts.models ? { ...modelFetchOptions(opts.modelsUrl, opts.quiet || opts.json), ...(project ? { project } : {}) } : false,
         views: opts.views,
         width: opts.width,
         height: opts.height,
@@ -92,6 +96,26 @@ async function main(argv: string[]): Promise<number> {
   }
   if (opts.json) console.log(JSON.stringify(summaries.length === 1 ? summaries[0] : summaries, null, 2));
   return failures > 0 ? 1 : 0;
+}
+
+/** Project reader over the directory holding a local .kicad_pcb (for ${KIPRJMOD} models). */
+async function localProject(dir: string): Promise<ProjectFiles> {
+  const entries = await readdir(dir, { recursive: true, withFileTypes: true });
+  const paths: string[] = [];
+  for (const e of entries) {
+    if (!e.isFile()) continue;
+    const full = join(e.parentPath ?? e.path, e.name);
+    const rel = relative(dir, full).split("\\").join("/");
+    if (rel.startsWith(".git/") || rel.includes("/node_modules/")) continue;
+    paths.push(rel);
+  }
+  return {
+    paths,
+    read: async (path) => {
+      const f = Bun.file(join(dir, path));
+      return (await f.exists()) ? new Uint8Array(await f.arrayBuffer()) : null;
+    },
+  };
 }
 
 /** Model fetching with an on-disk cache of the converted meshes. */

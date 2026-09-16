@@ -17,6 +17,7 @@
     "@astrojs/check": "0.9.4",
     "astro": "5.13.3",
     "fflate": "0.8.2",
+    "jpeg-js": "0.4.4",
     "pcb23d": "workspace:*"
   },
   "devDependencies": {

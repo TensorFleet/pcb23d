@@ -6,14 +6,20 @@
  * which the library ships for every part. Sources, in order: the pcb23d mesh API (R2 cache,
  * compact binary), then the GitHub mirror of the library (CORS enabled), parsed client-side.
  */
+import { gunzipSync } from "fflate";
 import { decodeMesh } from "./mesh-format";
 import { parseVrml, type ModelMesh } from "./vrml";
 
 export interface ModelRef {
   /** Path as written in the board file. */
   path: string;
-  /** Library-relative `.wrl` key, or undefined when the path cannot be resolved. */
+  /**
+   * Library key (`X.3dshapes/Y.wrl`), a project key (`project:<path relative to the source>`
+   * once `assignProjectModelKeys` ran), or undefined when the path cannot be resolved.
+   */
   key: string | undefined;
+  /** Path relative to the KiCad project directory for `${KIPRJMOD}` / relative references. */
+  projectPath?: string;
   offset: [number, number, number];
   scale: [number, number, number];
   rotate: [number, number, number];
@@ -21,6 +27,7 @@ export interface ModelRef {
 }
 
 export const DEFAULT_MODEL_API = "https://pcbto3d.com/api/models";
+export const PROJECT_KEY_PREFIX = "project:";
 export const KICAD_PACKAGES3D_RAW = "https://raw.githubusercontent.com/KiCad/kicad-packages3D/master";
 
 const KEY_RE = /^[\w.+-]+\.3dshapes\/[\w .,+()#&'~-]+\.wrl$/;
@@ -30,7 +37,9 @@ export function modelKey(path: string): string | undefined {
   let p = path.trim().replace(/\\/g, "/");
   const m = /\$\{?(KICAD\d*_3DMODEL_DIR|KISYS3DMOD|KICAD_3DMODEL_DIR)\}?\/(.+)$/.exec(p);
   if (m) p = m[2]!;
-  else if (/\$\{|\$\(|^[A-Za-z]:|^\/|^\.\.?\//.test(p)) {
+  else if (/^\$\{?KIPRJMOD\}?\//.test(p) || /^\.\.?\//.test(p)) {
+    return undefined; // project-local: resolved by assignProjectModelKeys, library only as fallback
+  } else if (/\$\{|\$\(|^[A-Za-z]:|^\//.test(p)) {
     // other variables, absolute, or project-relative: try to salvage a library-style tail
     const tail = /([\w.+-]+\.3dshapes\/[^/]+)$/.exec(p);
     if (!tail) return undefined;
@@ -43,6 +52,90 @@ export function modelKey(path: string): string | undefined {
   p = p.replace(/\.(step|stp|wrl|wrz|STEP|STP|WRL)$/, ".wrl");
   if (!/\.wrl$/.test(p)) p += ".wrl";
   return KEY_RE.test(p) ? p : undefined;
+}
+
+/** `${KIPRJMOD}/models/x.step` → `models/x.step`; plain relative paths pass through. */
+export function projectModelPath(path: string): string | undefined {
+  const p = path.trim().replace(/\\/g, "/");
+  const m = /^\$\{?KIPRJMOD\}?\/(.+)$/.exec(p);
+  if (m) return m[1]!;
+  if (/^\$\{|^\$\(|^[A-Za-z]:|^\//.test(p)) return undefined; // other variables or absolute
+  if (/\.3dshapes\//.test(p) && !p.startsWith(".")) return undefined; // library-style path handled by modelKey
+  return p;
+}
+
+export function isProjectKey(key: string): boolean {
+  return key.startsWith(PROJECT_KEY_PREFIX);
+}
+
+/** Join `dir` and a relative `path`, resolving `.` and `..` segments (forward slashes). */
+export function joinProjectPath(dir: string, path: string): string {
+  const parts: string[] = [];
+  for (const seg of `${dir ? dir + "/" : ""}${path}`.split("/")) {
+    if (!seg || seg === ".") continue;
+    if (seg === "..") parts.pop();
+    else parts.push(seg);
+  }
+  return parts.join("/");
+}
+
+/** Files next to the board, for project-local models. `paths` use forward slashes. */
+export interface ProjectFiles {
+  paths: string[];
+  read(path: string): Promise<Uint8Array | null>;
+}
+
+/** Give project-local model references a `project:` key relative to the board's directory. */
+export function assignProjectModelKeys(components: { models: ModelRef[] }[], boardDir: string): void {
+  for (const c of components) {
+    for (const ref of c.models) {
+      if (ref.key) continue;
+      const rel = projectModelPath(ref.path);
+      if (!rel) continue;
+      ref.projectPath = rel;
+      ref.key = PROJECT_KEY_PREFIX + joinProjectPath(boardDir, rel);
+    }
+  }
+}
+
+/** Candidate files for a project model path: the WRL/WRZ twin of a STEP, case-insensitively. */
+export function projectModelCandidates(path: string, paths: readonly string[]): string[] {
+  const stem = path.replace(/\.(step|stp|wrl|wrz|iges|igs)$/i, "");
+  const wanted = [`${stem}.wrl`, `${stem}.wrz`, `${stem}.WRL`, `${stem}.WRZ`];
+  const lower = new Map(paths.map((p) => [p.toLowerCase(), p] as const));
+  const out: string[] = [];
+  for (const w of wanted) {
+    const hit = lower.get(w.toLowerCase());
+    if (hit && !out.includes(hit)) out.push(hit);
+  }
+  return out;
+}
+
+async function fetchProjectModel(key: string, opts: ModelFetchOptions): Promise<ModelMesh | null> {
+  const project = opts.project;
+  const path = key.slice(PROJECT_KEY_PREFIX.length);
+  for (const candidate of project ? projectModelCandidates(path, project.paths) : []) {
+    try {
+      const bytes = await project!.read(candidate);
+      if (!bytes) continue;
+      const text = new TextDecoder().decode(/\.wrz$/i.test(candidate) || (bytes[0] === 0x1f && bytes[1] === 0x8b) ? gunzipSync(bytes) : bytes);
+      const mesh = parseVrml(text);
+      if (mesh.triangles > 0) return mesh;
+    } catch {
+      // try the next candidate
+    }
+  }
+  // A vendored copy of a library part (…/X.3dshapes/Y.step) without a WRL: use the library's.
+  const tail = /([\w.+-]+\.3dshapes\/[^/]+)$/.exec(path);
+  if (tail) {
+    const libKey = modelKey(tail[1]!);
+    if (libKey) {
+      const { project: _unused, ...rest } = opts;
+      void _unused;
+      return fetchModel(libKey, rest);
+    }
+  }
+  return null;
 }
 
 export function isValidModelKey(key: string): boolean {
@@ -65,11 +158,14 @@ export interface ModelFetchOptions {
   apiBase?: string;
   /** Max parallel downloads. Default 6. */
   concurrency?: number;
+  /** Files of the KiCad project, for `${KIPRJMOD}` and relative model paths. */
+  project?: ProjectFiles;
   onProgress?: (done: number, total: number, key: string) => void;
 }
 
 /** Fetch + parse one model: API (binary mesh) first, then the library WRL. Null when unavailable. */
 export async function fetchModel(key: string, opts: ModelFetchOptions = {}): Promise<ModelMesh | null> {
+  if (isProjectKey(key)) return fetchProjectModel(key, opts);
   if (!isValidModelKey(key)) return null;
   const f = opts.fetch ?? fetch;
   const apiBase = opts.apiBase ?? DEFAULT_MODEL_API;
@@ -94,7 +190,7 @@ export async function fetchModel(key: string, opts: ModelFetchOptions = {}): Pro
 
 /** Fetch many models with bounded concurrency; missing ones are simply absent from the map. */
 export async function fetchModels(keys: Iterable<string>, opts: ModelFetchOptions = {}): Promise<Map<string, ModelMesh>> {
-  const unique = [...new Set(keys)].filter(isValidModelKey);
+  const unique = [...new Set(keys)].filter((k) => isProjectKey(k) || isValidModelKey(k));
   const out = new Map<string, ModelMesh>();
   let next = 0;
   let done = 0;
