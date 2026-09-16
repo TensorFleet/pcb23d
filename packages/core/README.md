@@ -102,7 +102,7 @@ a 1600×1200 view takes a few hundred milliseconds).
   set the defaults.
 
 Not rendered yet: silkscreen text, STEP/VRML models, inner layers, board edge
-plating. See [docs/architecture.md](docs/architecture.md).
+plating. See [docs/architecture.md](docs/architecture.md). Deployment and domains: [docs/cloudflare.md](docs/cloudflare.md).
 
 ## Web app
 
