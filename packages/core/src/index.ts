@@ -23,7 +23,7 @@ export { pickBoardPath, isZip } from "./input";
 export { parseGithubUrl, fetchGithubBoard, fetchRemoteBoard, isRemoteInput } from "./github";
 export { parseVrml } from "./models/vrml";
 export { encodeMesh, decodeMesh } from "./models/mesh-format";
-export { modelKey, isValidModelKey, modelRawUrl, modelApiUrl, fetchModel, fetchModels, DEFAULT_MODEL_API, KICAD_PACKAGES3D_RAW } from "./models/refs";
+export { modelKey, isValidModelKey, modelRawUrl, modelStepUrl, modelApiUrl, fetchModel, fetchModels, DEFAULT_MODEL_API, KICAD_PACKAGES3D_RAW, KICAD_PACKAGES3D_GITLAB } from "./models/refs";
 export { assignProjectModelKeys, projectModelPath, joinProjectPath, isProjectKey, PROJECT_KEY_PREFIX } from "./models/refs";
 export { projectFromSource, boardDir } from "./input";
 export { githubProject } from "./github";

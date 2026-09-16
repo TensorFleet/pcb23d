@@ -18,3 +18,4 @@ coverage/
 apps/web/public/occt/occt-import-js.js
 apps/web/public/occt/occt-import-js.wasm
 apps/web/public/occt/license.*
+apps/cli/scripts/seed-progress*.log

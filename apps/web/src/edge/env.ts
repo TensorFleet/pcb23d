@@ -26,6 +26,8 @@ export interface Env {
    */
   RENDERS?: R2BucketLike;
   PRIMARY_HOST?: string;
+  /** Bearer token that allows PUT /api/models/<key> (bulk seeding from a KiCad install). */
+  MODELS_ADMIN_TOKEN?: string;
   /** pcbFiddle origin used to clone + read GitHub boards (`https://pcbfiddle.com`). */
   PCBFIDDLE_ORIGIN?: string;
 }

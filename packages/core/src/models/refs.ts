@@ -166,6 +166,13 @@ export function modelRawUrl(key: string): string {
   return `${KICAD_PACKAGES3D_RAW}/${key.split("/").map(encodeURIComponent).join("/")}`;
 }
 
+/** GitLab (current KiCad library, STEP only) raw file URL for a library key. */
+export const KICAD_PACKAGES3D_GITLAB = "https://gitlab.com/api/v4/projects/kicad%2Flibraries%2Fkicad-packages3D/repository/files";
+export function modelStepUrl(key: string): string {
+  const path = key.replace(/\.wrl$/i, ".step");
+  return `${KICAD_PACKAGES3D_GITLAB}/${encodeURIComponent(path)}/raw?ref=master`;
+}
+
 export function modelApiUrl(key: string, apiBase = DEFAULT_MODEL_API): string {
   return `${apiBase.replace(/\/$/, "")}/${key.split("/").map(encodeURIComponent).join("/")}`;
 }
@@ -216,6 +223,11 @@ async function fetchLibraryModel(key: string, opts: ModelFetchOptions): Promise<
   if (apiBase) {
     try {
       const res = await f(modelApiUrl(key, apiBase));
+      if (res.ok && res.headers.get("x-pcb23d-model") === "step") {
+        // current-library STEP handed through by the edge: tessellate locally when we can
+        if (!opts.convertStep) return null;
+        return opts.convertStep(new Uint8Array(await res.arrayBuffer()));
+      }
       if (res.ok) return decodeMesh(new Uint8Array(await res.arrayBuffer()));
       // the API answers 404 with this header after checking the library itself
       if (res.status === 404 && res.headers.get("x-pcb23d-model") === "missing") return null;

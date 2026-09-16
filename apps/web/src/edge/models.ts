@@ -4,22 +4,64 @@
  * kicad-packages3D. `loadModelMesh` is the R2/upstream half without the HTTP layer so
  * the board renderer on this same Worker can pull meshes with one R2 read each.
  */
-import { encodeMesh, isValidModelKey, modelRawUrl, parseVrml } from "pcb23d";
+import { decodeMesh, encodeMesh, isValidModelKey, modelRawUrl, modelStepUrl, parseVrml } from "pcb23d";
 import { edgeCache, type Env, type ExecutionContextLike } from "./env";
 
-const MESH_VERSION = "v1";
+/** Bump when mesh content changes shape or colour so edge caches and R2 keys roll over. */
+const MESH_VERSION = "v2";
+const MAX_MESH_BYTES = 64 * 1024 * 1024;
 const MAX_WRL_BYTES = 40 * 1024 * 1024;
 
 export const CORS: Record<string, string> = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "GET, HEAD, OPTIONS",
+  "Access-Control-Allow-Methods": "GET, HEAD, PUT, OPTIONS",
+  "Access-Control-Allow-Headers": "Authorization, Content-Type, X-PCB23D-Source",
+  "Access-Control-Expose-Headers": "X-PCB23D-Model, X-PCB23D-Source",
   "Access-Control-Max-Age": "86400",
 };
 
 export type ModelLookup =
   | { kind: "mesh"; bytes: Uint8Array; source: "r2" | "convert" }
+  /** Current-library STEP from GitLab: the edge cannot tessellate it, the client can. */
+  | { kind: "step"; bytes: Uint8Array }
   | { kind: "missing" }
   | { kind: "error"; status: number; message: string };
+
+export function meshObjectKey(key: string): string {
+  return `mesh/${MESH_VERSION}/${key}.bin`;
+}
+
+/** Store a client-supplied mesh (authenticated bulk seeding). */
+export async function putModelMesh(request: Request, env: Env, key: string): Promise<Response> {
+  const auth = request.headers.get("authorization") ?? "";
+  const token = auth.startsWith("Bearer ") ? auth.slice(7) : "";
+  if (!env.MODELS_ADMIN_TOKEN || token.length < 32 || !timingSafeEqual(token, env.MODELS_ADMIN_TOKEN)) {
+    return new Response("unauthorized", { status: 401, headers: CORS });
+  }
+  if (!env.MODELS) return new Response("no MODELS bucket", { status: 503, headers: CORS });
+  const length = Number(request.headers.get("content-length") ?? 0);
+  if (length > MAX_MESH_BYTES) return new Response("mesh too large", { status: 413, headers: CORS });
+  const bytes = new Uint8Array(await request.arrayBuffer());
+  try {
+    const mesh = decodeMesh(bytes);
+    if (mesh.triangles === 0) return new Response("empty mesh", { status: 422, headers: CORS });
+  } catch (error) {
+    return new Response(`not a pcb23d mesh: ${(error as Error).message}`, { status: 422, headers: CORS });
+  }
+  const source = request.headers.get("x-pcb23d-source") ?? "seed";
+  await env.MODELS.put(meshObjectKey(key), bytes, {
+    httpMetadata: { contentType: "application/octet-stream" },
+    customMetadata: { source: source.slice(0, 200) },
+  });
+  return new Response(null, { status: 204, headers: CORS });
+}
+
+function timingSafeEqual(a: string, b: string): boolean {
+  if (a.length !== b.length) return false;
+  let diff = 0;
+  for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  return diff === 0;
+}
 
 /** Resolve one library key to mesh bytes: R2 first, then convert the upstream WRL and store it. */
 export async function loadModelMesh(
@@ -27,21 +69,30 @@ export async function loadModelMesh(
   env: Env,
   ctx: ExecutionContextLike,
 ): Promise<ModelLookup> {
-  const objectKey = `mesh/${MESH_VERSION}/${key}.bin`;
+  const objectKey = meshObjectKey(key);
   if (env.MODELS) {
     const obj = await env.MODELS.get(objectKey);
     if (obj) {
-      if (obj.customMetadata?.missing === "1") return { kind: "missing" };
-      return { kind: "mesh", bytes: new Uint8Array(await obj.arrayBuffer()), source: "r2" };
+      if (obj.customMetadata?.missing === "1") {
+        // re-check upstream once a week in case the model appeared
+        const at = Number(obj.customMetadata.missingAt ?? 0);
+        if (Date.now() - at < 7 * 86400_000) return { kind: "missing" };
+      } else {
+        return { kind: "mesh", bytes: new Uint8Array(await obj.arrayBuffer()), source: "r2" };
+      }
     }
   }
-  const upstream = await fetch(modelRawUrl(key), {
-    headers: { "User-Agent": "pcb23d-model-cache (+https://pcbto3d.com)" },
-  });
+  const headers = { "User-Agent": "pcb23d-model-cache (+https://pcbto3d.com)" };
+  const upstream = await fetch(modelRawUrl(key), { headers });
   if (upstream.status === 404) {
+    // The GitHub mirror stopped in 2020; the current library on GitLab ships STEP only.
+    const step = await fetch(modelStepUrl(key), { headers });
+    if (step.ok) return { kind: "step", bytes: new Uint8Array(await step.arrayBuffer()) };
     if (env.MODELS)
       ctx.waitUntil(
-        env.MODELS.put(objectKey, new Uint8Array(0), { customMetadata: { missing: "1" } }),
+        env.MODELS.put(objectKey, new Uint8Array(0), {
+          customMetadata: { missing: "1", missingAt: String(Date.now()) },
+        }),
       );
     return { kind: "missing" };
   }
@@ -79,10 +130,11 @@ export async function handleModel(
   url: URL,
 ): Promise<Response> {
   if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: CORS });
-  if (request.method !== "GET" && request.method !== "HEAD")
-    return new Response("method not allowed", { status: 405, headers: CORS });
   const key = decodeURIComponent(url.pathname.slice("/api/models/".length));
   if (!isValidModelKey(key)) return new Response("bad model key", { status: 400, headers: CORS });
+  if (request.method === "PUT") return putModelMesh(request, env, key);
+  if (request.method !== "GET" && request.method !== "HEAD")
+    return new Response("method not allowed", { status: 405, headers: CORS });
 
   const cache = edgeCache();
   const cacheKey = new Request(`${url.origin}/api/models/${MESH_VERSION}/${key}`, {
@@ -95,6 +147,19 @@ export async function handleModel(
   if (found.kind === "missing") return missing(key);
   if (found.kind === "error")
     return new Response(found.message, { status: found.status, headers: CORS });
+  if (found.kind === "step") {
+    // Hand the current-library STEP to the client, which tessellates it with OpenCascade.
+    const res = new Response(found.bytes as BodyInit, {
+      headers: {
+        ...CORS,
+        "Content-Type": "application/step",
+        "Cache-Control": "public, max-age=604800",
+        "X-PCB23D-Model": "step",
+      },
+    });
+    ctx.waitUntil(cache.put(cacheKey, res.clone()));
+    return res;
+  }
   const res = meshResponse(found.bytes, found.source);
   ctx.waitUntil(cache.put(cacheKey, res.clone()));
   return res;
