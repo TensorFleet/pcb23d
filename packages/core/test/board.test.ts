@@ -50,6 +50,21 @@ describe("parseBoard", () => {
     expect(board.components[0]!.side).toBe("front");
     expect(board.outline[0]!.outer).toHaveLength(4);
   });
+  test("reads the 2026 footprint transform block", () => {
+    const board = parseBoard(`(kicad_pcb (version 20260831) (layers (0 "F.Cu" signal) (2 "B.Cu" signal))
+      (footprint "Test:R" (placed yes) (layer "F.Cu")
+        (transform (translate 12.155 25.1) (rotate 90) (scale 1 1))
+        (fp_rect (start -0.8 -0.4) (end 0.8 0.4) (stroke (width 0.1) (type solid)) (fill no) (layer "F.Fab"))
+        (pad "1" smd roundrect (at -0.825 0) (size 0.8 0.95) (layers "F.Cu" "F.Mask" "F.Paste") (roundrect_rratio 0.25) (net "ATT_IN")))
+      (gr_rect (start 0 0) (end 40 40) (layer "Edge.Cuts") (stroke (width 0.1) (type solid)) (fill no)))`);
+    const pad = board.shapes.get("F.Cu")![0]!;
+    const cx = pad.reduce((a, p) => a + p.x, 0) / pad.length;
+    const cy = pad.reduce((a, p) => a + p.y, 0) / pad.length;
+    expect(cx).toBeCloseTo(12.155, 3); // local (-0.825, 0) rotated 90° CCW on screen → (0, +0.825)
+    expect(cy).toBeCloseTo(25.925, 3);
+    expect(board.components[0]!.at).toEqual({ x: 12.155, y: 25.1 });
+    expect(board.components[0]!.rotation).toBe(90);
+  });
   test("rejects non-board input", () => {
     expect(() => parseBoard("(kicad_sch (version 1))")).toThrow(/not a KiCad board/);
   });

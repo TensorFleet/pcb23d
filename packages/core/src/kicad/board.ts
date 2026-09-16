@@ -350,9 +350,7 @@ class ParseContext {
 
   footprint(item: SExpr[]): void {
     const name = typeof item[1] === "string" ? item[1] : "";
-    const atList = child(item, "at");
-    const atNums = numbers(atList);
-    const t: Transform = { at: { x: atNums[0] ?? 0, y: atNums[1] ?? 0 }, rot: atNums[2] ?? 0 };
+    const t = footprintTransform(item);
     const layer = str(item, "layer") ?? "F.Cu";
     const side: Side = layer.startsWith("B.") ? "back" : "front";
     const fpMaskMargin = numbers(child(item, "solder_mask_margin"))[0];
@@ -856,6 +854,22 @@ export function buildOutline(paths: Vec2[][], rings: Ring[]): Polygon[] {
     else polys.push({ outer: ring, holes: [] });
   }
   return polys;
+}
+
+/**
+ * Footprint placement. KiCad ≤9 writes `(at x y [rot])`; the 2026 format writes
+ * `(transform (translate x y) (rotate deg) (scale sx sy))`.
+ */
+export function footprintTransform(item: SExpr[]): Transform {
+  const at = numbers(child(item, "at"));
+  if (at.length >= 2) return { at: { x: at[0]!, y: at[1]! }, rot: at[2] ?? 0 };
+  const transform = child(item, "transform");
+  if (transform) {
+    const tr = numbers(child(transform, "translate"));
+    const rot = numbers(child(transform, "rotate"))[0] ?? 0;
+    return { at: { x: tr[0] ?? 0, y: tr[1] ?? 0 }, rot };
+  }
+  return { at: { x: 0, y: 0 }, rot: 0 };
 }
 
 function isHidden(item: SExpr[]): boolean {
