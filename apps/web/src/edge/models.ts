@@ -9,6 +9,8 @@ import { edgeCache, type Env, type ExecutionContextLike } from "./env";
 
 /** Bump when mesh content changes shape or colour so edge caches and R2 keys roll over. */
 const MESH_VERSION = "v2";
+/** Edge-cache namespace; bump separately to drop cached responses without touching R2. */
+const EDGE_CACHE_VERSION = "e3";
 const MAX_MESH_BYTES = 64 * 1024 * 1024;
 const MAX_WRL_BYTES = 40 * 1024 * 1024;
 
@@ -137,7 +139,7 @@ export async function handleModel(
     return new Response("method not allowed", { status: 405, headers: CORS });
 
   const cache = edgeCache();
-  const cacheKey = new Request(`${url.origin}/api/models/${MESH_VERSION}/${key}`, {
+  const cacheKey = new Request(`${url.origin}/api/models/${EDGE_CACHE_VERSION}/${key}`, {
     method: "GET",
   });
   const cached = await cache.match(cacheKey);
@@ -149,16 +151,15 @@ export async function handleModel(
     return new Response(found.message, { status: found.status, headers: CORS });
   if (found.kind === "step") {
     // Hand the current-library STEP to the client, which tessellates it with OpenCascade.
-    const res = new Response(found.bytes as BodyInit, {
+    // Not edge-cached: a seeded mesh must take over on the next request.
+    return new Response(found.bytes as BodyInit, {
       headers: {
         ...CORS,
         "Content-Type": "application/step",
-        "Cache-Control": "public, max-age=604800",
+        "Cache-Control": "public, max-age=3600",
         "X-PCB23D-Model": "step",
       },
     });
-    ctx.waitUntil(cache.put(cacheKey, res.clone()));
-    return res;
   }
   const res = meshResponse(found.bytes, found.source);
   ctx.waitUntil(cache.put(cacheKey, res.clone()));
