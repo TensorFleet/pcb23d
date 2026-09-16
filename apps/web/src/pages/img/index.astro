@@ -1,0 +1,388 @@
+---
+/**
+ * Template for /img/gh/<owner>/<repo>[/@ref]. The edge script (src/edge/img.ts) serves this
+ * page for every slug and fills the data-slot elements and og tags with HTMLRewriter, so
+ * the placeholders below are never what a visitor sees for a real repo. Visiting /img/
+ * directly shows only the picker.
+ */
+import Base from "../../layouts/Base.astro";
+---
+
+<Base
+  title="Board render — PCB23D"
+  description="Link to a 3D render of any public KiCad board on GitHub. The image is drawn from the source and cached."
+  image="https://pcbto3d.com/img/placeholder.jpg"
+>
+  <main class="wrap">
+    <section class="render" data-slot="render" hidden>
+      <p class="kicker"><span></span> GitHub → 3D render</p>
+      <h1 data-slot="repo">owner/repo</h1>
+
+      <figure class="stage" id="stage">
+        <img data-slot="image" id="board-image" alt="3D render of the board" decoding="async" />
+        <figcaption class="stage-state" id="stage-state">
+          <span class="spinner" aria-hidden="true"></span>
+          <em>Rendering from the GitHub source… the first render of a commit takes a few seconds.</em>
+        </figcaption>
+      </figure>
+
+      <div class="views" role="group" aria-label="View">
+        <a class="chip is-active" data-view="angle" href="#">Angle</a>
+        <a class="chip" data-view="top" href="#">Top</a>
+        <a class="chip" data-view="bottom" href="#">Bottom</a>
+        <a class="chip" data-view="front" href="#">Front</a>
+      </div>
+
+      <div class="actions">
+        <a class="btn-primary" data-slot="download" href="#" download>Download JPG</a>
+        <a class="btn-ghost" data-slot="fiddle" href="https://pcbfiddle.com">Open in pcbFiddle</a>
+        <a class="btn-ghost" data-slot="github" href="https://github.com">View on GitHub</a>
+      </div>
+
+      <section class="share">
+        <p class="kicker"><span></span> Share</p>
+        <p class="share-lede">
+          Paste the page link anywhere that unfurls previews — Slack, X, Discord, GitHub issues — and the render shows up as
+          the card. The image link works on its own too, and is redrawn when the repo's default branch moves.
+        </p>
+        <div class="share-row">
+          <span class="share-label">Page</span>
+          <code data-slot="page-url" id="page-url">https://pcbto3d.com/img/gh/owner/repo</code>
+          <button type="button" class="copy" data-copy="page-url">Copy</button>
+        </div>
+        <div class="share-row">
+          <span class="share-label">Image</span>
+          <code data-slot="image-url" id="image-url">https://pcbto3d.com/img/gh/owner/repo.jpg</code>
+          <button type="button" class="copy" data-copy="image-url">Copy</button>
+        </div>
+        <div class="share-row">
+          <span class="share-label">Markdown</span>
+          <code id="markdown"></code>
+          <button type="button" class="copy" data-copy="markdown">Copy</button>
+        </div>
+        <p class="share-note">
+          Pin a commit with <code>/@&lt;sha&gt;</code> for an image that never changes; add <code>?view=top</code>,
+          <code>bottom</code>, or <code>front</code> to the image link for another angle, or swap <code>.jpg</code> for
+          <code>.png</code>.
+        </p>
+      </section>
+    </section>
+
+    <section class="picker" data-slot="picker">
+      <p class="kicker"><span></span> Link to a render</p>
+      <h1>Any public KiCad board on GitHub, as a shareable 3D image.</h1>
+      <p class="picker-lede">
+        <code>pcbto3d.com/img/gh/owner/repo</code> is a page with the render up top and an <code>og:image</code> set to it, so
+        the board shows up wherever the link is unfurled. The image is drawn once per commit and cached.
+      </p>
+      <form class="picker-form" id="picker-form" autocomplete="off">
+        <input id="picker-input" name="repo" type="text" spellcheck="false" placeholder="github.com/owner/repo or owner/repo" />
+        <button type="submit" class="btn-primary">Render</button>
+      </form>
+      <p class="form-error" id="picker-error" hidden></p>
+    </section>
+  </main>
+</Base>
+
+<script>
+  const image = document.querySelector<HTMLImageElement>("#board-image");
+  const state = document.querySelector<HTMLElement>("#stage-state");
+  const stage = document.querySelector<HTMLElement>("#stage");
+  const download = document.querySelector<HTMLAnchorElement>('[data-slot="download"]');
+  const pageUrl = document.querySelector<HTMLElement>("#page-url");
+  const imageUrl = document.querySelector<HTMLElement>("#image-url");
+  const markdown = document.querySelector<HTMLElement>("#markdown");
+  const repo = document.querySelector<HTMLElement>('[data-slot="repo"]');
+
+  if (markdown && pageUrl && imageUrl) {
+    markdown.textContent = `[![${repo?.textContent ?? "board"}](${imageUrl.textContent})](${pageUrl.textContent})`;
+  }
+
+  const showError = async (src: string) => {
+    if (!state) return;
+    let message = "The render failed.";
+    try {
+      const res = await fetch(src);
+      if (!res.ok) message = (await res.text()) || `${message} (${res.status})`;
+    } catch {
+      // keep the generic message
+    }
+    state.innerHTML = "";
+    const em = document.createElement("em");
+    em.textContent = message;
+    state.append(em);
+    stage?.classList.add("is-error");
+  };
+
+  if (image) {
+    const settle = () => {
+      stage?.classList.add("is-loaded");
+      stage?.classList.remove("is-error");
+    };
+    image.addEventListener("load", settle);
+    image.addEventListener("error", () => void showError(image.currentSrc || image.src));
+    if (image.complete && image.naturalWidth > 0) settle();
+  }
+
+  for (const chip of document.querySelectorAll<HTMLAnchorElement>("[data-view]")) {
+    chip.addEventListener("click", (event) => {
+      if (!image) return;
+      event.preventDefault();
+      for (const other of document.querySelectorAll("[data-view]")) other.classList.toggle("is-active", other === chip);
+      stage?.classList.remove("is-loaded", "is-error");
+      if (state) {
+        state.innerHTML = '<span class="spinner" aria-hidden="true"></span><em>Rendering…</em>';
+      }
+      image.src = chip.href;
+      if (download) download.href = chip.href;
+    });
+  }
+
+  for (const button of document.querySelectorAll<HTMLButtonElement>("[data-copy]")) {
+    button.addEventListener("click", async () => {
+      const text = document.getElementById(button.dataset.copy ?? "")?.textContent ?? "";
+      try {
+        await navigator.clipboard.writeText(text);
+        button.textContent = "Copied";
+        setTimeout(() => (button.textContent = "Copy"), 1200);
+      } catch {
+        button.textContent = "Select it";
+      }
+    });
+  }
+
+  const form = document.querySelector<HTMLFormElement>("#picker-form");
+  const input = document.querySelector<HTMLInputElement>("#picker-input");
+  const error = document.querySelector<HTMLElement>("#picker-error");
+  form?.addEventListener("submit", (event) => {
+    event.preventDefault();
+    const raw = (input?.value ?? "").trim().replace(/^https?:\/\//i, "").replace(/^(www\.)?github\.com\//i, "");
+    const m = /^([\w.-]+)\/([\w.-]+?)(?:\.git)?(?:\/tree\/([^\s]+))?\/?$/.exec(raw);
+    if (!m) {
+      if (error) {
+        error.textContent = "Enter a GitHub repo as owner/repo or a github.com URL.";
+        error.hidden = false;
+      }
+      return;
+    }
+    const ref = m[3] ? `/@${m[3].split("/").map(encodeURIComponent).join("/")}` : "";
+    location.href = `/img/gh/${encodeURIComponent(m[1]!)}/${encodeURIComponent(m[2]!)}${ref}`;
+  });
+</script>
+
+<style>
+  .wrap {
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 48px 24px 96px;
+  }
+  h1 {
+    font-size: clamp(1.6rem, 3.6vw, 2.6rem);
+    letter-spacing: -0.04em;
+    line-height: 1.05;
+    margin: 12px 0 24px;
+    overflow-wrap: anywhere;
+  }
+  .stage {
+    position: relative;
+    margin: 0;
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    background: #151a14;
+    aspect-ratio: 1200 / 630;
+    overflow: hidden;
+    display: grid;
+    place-items: center;
+  }
+  .stage img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    display: block;
+    opacity: 0;
+    transition: opacity 0.25s ease;
+  }
+  .stage.is-loaded img {
+    opacity: 1;
+  }
+  .stage-state {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    padding: 24px;
+    text-align: center;
+    color: #a5aea0;
+    font-size: 14px;
+  }
+  .stage.is-loaded .stage-state {
+    display: none;
+  }
+  .stage.is-error .stage-state {
+    color: var(--danger);
+  }
+  .stage.is-error .spinner {
+    display: none;
+  }
+  .spinner {
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    border: 2px solid color-mix(in srgb, var(--acid) 30%, transparent);
+    border-top-color: var(--acid);
+    animation: spin 0.9s linear infinite;
+    flex-shrink: 0;
+  }
+  @keyframes spin {
+    to {
+      transform: rotate(360deg);
+    }
+  }
+  .views {
+    display: flex;
+    gap: 8px;
+    margin: 16px 0 0;
+    flex-wrap: wrap;
+  }
+  .chip {
+    border: 1px solid var(--line-2);
+    border-radius: 999px;
+    padding: 6px 14px;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--muted);
+  }
+  .chip:hover {
+    color: var(--ink);
+    border-color: var(--acid);
+  }
+  .chip.is-active {
+    color: #162013;
+    background: var(--acid);
+    border-color: var(--acid);
+  }
+  .actions {
+    display: flex;
+    gap: 10px;
+    margin: 20px 0 0;
+    flex-wrap: wrap;
+  }
+  .btn-primary,
+  .btn-ghost,
+  .copy {
+    border-radius: 10px;
+    padding: 10px 16px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    border: 1px solid transparent;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-family: inherit;
+  }
+  .btn-primary {
+    background: var(--acid);
+    color: #162013;
+  }
+  .btn-ghost,
+  .copy {
+    background: transparent;
+    color: var(--ink);
+    border-color: var(--line-2);
+  }
+  .btn-ghost:hover,
+  .copy:hover {
+    border-color: var(--acid);
+  }
+  .copy {
+    padding: 6px 12px;
+    font-size: 12px;
+  }
+  .share {
+    margin-top: 48px;
+    border-top: 1px solid var(--line);
+    padding-top: 28px;
+  }
+  .share-lede,
+  .picker-lede,
+  .share-note {
+    color: var(--muted);
+    line-height: 1.7;
+    max-width: 70ch;
+  }
+  .share-row {
+    display: grid;
+    grid-template-columns: 90px 1fr auto;
+    gap: 12px;
+    align-items: center;
+    margin: 10px 0;
+  }
+  .share-label {
+    color: var(--muted);
+    font: 700 10px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace;
+    text-transform: uppercase;
+    letter-spacing: 0.16em;
+  }
+  .share-row code,
+  .picker-lede code,
+  .share-note code {
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 13px;
+    background: var(--paper-2);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 8px 10px;
+    overflow-wrap: anywhere;
+  }
+  .picker-lede code,
+  .share-note code {
+    padding: 1px 6px;
+  }
+  .share-note {
+    margin-top: 18px;
+    font-size: 13px;
+  }
+  .picker {
+    max-width: 720px;
+  }
+  .picker-form {
+    display: flex;
+    gap: 10px;
+    margin-top: 20px;
+  }
+  .picker-form input {
+    flex: 1;
+    min-width: 0;
+    border: 1px solid var(--line-2);
+    border-radius: 10px;
+    background: var(--paper-2);
+    color: var(--ink);
+    padding: 10px 14px;
+    font: inherit;
+  }
+  .picker-form input:focus {
+    outline: none;
+    border-color: var(--acid);
+  }
+  .form-error {
+    color: var(--danger);
+    font-size: 14px;
+  }
+  @media (max-width: 640px) {
+    .wrap {
+      padding: 28px 14px 64px;
+    }
+    .share-row {
+      grid-template-columns: 1fr auto;
+    }
+    .share-label {
+      grid-column: 1 / -1;
+    }
+    .picker-form {
+      flex-direction: column;
+    }
+  }
+</style>

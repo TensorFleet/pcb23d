@@ -14,6 +14,8 @@ export interface CliOptions {
   components: boolean;
   models: boolean;
   modelsUrl: string | undefined;
+  step: boolean;
+  occtUrl: string;
   pixelsPerMm: number | undefined;
   json: boolean;
   quiet: boolean;
@@ -47,6 +49,10 @@ Options:
       --models-url <base>  Mesh API base (default https://pcbto3d.com/api/models);
                            falls back to raw.githubusercontent.com/KiCad/kicad-packages3D.
                            Converted models are cached in ~/.cache/pcb23d/models
+      --no-step            Do not tessellate STEP models (project parts without a WRL).
+                           STEP support downloads OpenCascade WASM (7 MB) once into
+                           ~/.cache/pcb23d/occt
+      --occt-url <base>    Where to fetch that runtime (default https://pcbto3d.com/occt)
       --texture <ppmm>     Texture pixels per mm (default 16)
       --json               Print a JSON summary to stdout
   -q, --quiet              No progress output
@@ -70,6 +76,8 @@ export function parseArgs(argv: string[]): CliOptions {
     components: true,
     models: true,
     modelsUrl: undefined,
+    step: true,
+    occtUrl: "https://pcbto3d.com/occt",
     pixelsPerMm: undefined,
     json: false,
     quiet: false,
@@ -137,6 +145,12 @@ export function parseArgs(argv: string[]): CliOptions {
         break;
       case "--models-url":
         o.modelsUrl = value(key);
+        break;
+      case "--no-step":
+        o.step = false;
+        break;
+      case "--occt-url":
+        o.occtUrl = value(key);
         break;
       case "--json":
         o.json = true;

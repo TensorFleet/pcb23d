@@ -8,6 +8,7 @@
  */
 import { gunzipSync } from "fflate";
 import { decodeMesh } from "./mesh-format";
+import { isStepPath } from "./occt";
 import { parseVrml, type ModelMesh } from "./vrml";
 
 export interface ModelRef {
@@ -99,9 +100,9 @@ export function assignProjectModelKeys(components: { models: ModelRef[] }[], boa
 }
 
 /** Candidate files for a project model path: the WRL/WRZ twin of a STEP, case-insensitively. */
-export function projectModelCandidates(path: string, paths: readonly string[]): string[] {
+export function projectModelCandidates(path: string, paths: readonly string[], includeStep = false): string[] {
   const stem = path.replace(/\.(step|stp|wrl|wrz|iges|igs)$/i, "");
-  const wanted = [`${stem}.wrl`, `${stem}.wrz`, `${stem}.WRL`, `${stem}.WRZ`];
+  const wanted = [`${stem}.wrl`, `${stem}.wrz`, ...(includeStep ? [`${stem}.step`, `${stem}.stp`] : [])];
   const lower = new Map(paths.map((p) => [p.toLowerCase(), p] as const));
   const out: string[] = [];
   for (const w of wanted) {
@@ -111,16 +112,35 @@ export function projectModelCandidates(path: string, paths: readonly string[]): 
   return out;
 }
 
+/** Project files whose base name matches `stem` (any 3D extension), shallowest first. */
+export function projectFilesByStem(stem: string, paths: readonly string[]): string[] {
+  const want = stem.toLowerCase();
+  return paths
+    .filter((p) => {
+      const base = p.slice(p.lastIndexOf("/") + 1).replace(/\.(step|stp|wrl|wrz)$/i, "");
+      return base.toLowerCase() === want && /\.(step|stp|wrl|wrz)$/i.test(p);
+    })
+    .sort((a, b) => a.split("/").length - b.split("/").length || a.localeCompare(b));
+}
+
+async function readProjectModel(path: string, opts: ModelFetchOptions): Promise<ModelMesh | null> {
+  const project = opts.project;
+  if (!project) return null;
+  const bytes = await project.read(path);
+  if (!bytes) return null;
+  if (isStepPath(path)) return opts.convertStep ? opts.convertStep(bytes) : null;
+  const gz = /\.wrz$/i.test(path) || (bytes[0] === 0x1f && bytes[1] === 0x8b);
+  const mesh = parseVrml(new TextDecoder().decode(gz ? gunzipSync(bytes) : bytes));
+  return mesh.triangles > 0 ? mesh : null;
+}
+
 async function fetchProjectModel(key: string, opts: ModelFetchOptions): Promise<ModelMesh | null> {
   const project = opts.project;
   const path = key.slice(PROJECT_KEY_PREFIX.length);
-  for (const candidate of project ? projectModelCandidates(path, project.paths) : []) {
+  for (const candidate of project ? projectModelCandidates(path, project.paths, Boolean(opts.convertStep)) : []) {
     try {
-      const bytes = await project!.read(candidate);
-      if (!bytes) continue;
-      const text = new TextDecoder().decode(/\.wrz$/i.test(candidate) || (bytes[0] === 0x1f && bytes[1] === 0x8b) ? gunzipSync(bytes) : bytes);
-      const mesh = parseVrml(text);
-      if (mesh.triangles > 0) return mesh;
+      const mesh = await readProjectModel(candidate, opts);
+      if (mesh) return mesh;
     } catch {
       // try the next candidate
     }
@@ -160,6 +180,12 @@ export interface ModelFetchOptions {
   concurrency?: number;
   /** Files of the KiCad project, for `${KIPRJMOD}` and relative model paths. */
   project?: ProjectFiles;
+  /**
+   * STEP → mesh converter (see `occtStepConverter`). Used for project models that only ship
+   * STEP, and for library models missing upstream but vendored in the project. Optional: without
+   * it those parts fall back to boxes.
+   */
+  convertStep?: (bytes: Uint8Array) => Promise<ModelMesh | null>;
   onProgress?: (done: number, total: number, key: string) => void;
 }
 
@@ -167,6 +193,24 @@ export interface ModelFetchOptions {
 export async function fetchModel(key: string, opts: ModelFetchOptions = {}): Promise<ModelMesh | null> {
   if (isProjectKey(key)) return fetchProjectModel(key, opts);
   if (!isValidModelKey(key)) return null;
+  const mesh = await fetchLibraryModel(key, opts);
+  if (mesh) return mesh;
+  // Not in the library mirror: maybe the project vendors a copy under the same name.
+  if (opts.project) {
+    const stem = key.slice(key.lastIndexOf("/") + 1).replace(/\.wrl$/, "");
+    for (const candidate of projectFilesByStem(stem, opts.project.paths)) {
+      try {
+        const m = await readProjectModel(candidate, opts);
+        if (m) return m;
+      } catch {
+        // next
+      }
+    }
+  }
+  return null;
+}
+
+async function fetchLibraryModel(key: string, opts: ModelFetchOptions): Promise<ModelMesh | null> {
   const f = opts.fetch ?? fetch;
   const apiBase = opts.apiBase ?? DEFAULT_MODEL_API;
   if (apiBase) {

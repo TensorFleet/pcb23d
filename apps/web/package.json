@@ -4,8 +4,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "astro dev",
-    "build": "astro check && astro build",
+    "dev": "bun scripts/copy-occt.ts && astro dev",
+    "build": "bun scripts/copy-occt.ts && astro check && astro build",
     "preview": "astro preview",
     "typecheck": "astro check",
     "cf:dev": "bun run build && wrangler dev --config wrangler.jsonc",
@@ -22,6 +22,7 @@
   },
   "devDependencies": {
     "@types/bun": "1.2.21",
+    "occt-import-js": "0.0.23",
     "typescript": "5.9.2",
     "wrangler": "^4.127.1"
   }

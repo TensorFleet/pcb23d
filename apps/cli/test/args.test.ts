@@ -19,6 +19,8 @@ describe("parseArgs", () => {
     expect(o.json).toBe(true);
     expect(o.models).toBe(true);
     expect(parseArgs(["--no-models", "--models-url", "http://localhost:8787/api/models", "x"]).models).toBe(false);
+    expect(parseArgs(["--no-step", "x"]).step).toBe(false);
+    expect(parseArgs(["x"]).occtUrl).toContain("/occt");
   });
   test("rejects bad values", () => {
     expect(() => parseArgs(["--width", "abc", "x"])).toThrow(/--width/);

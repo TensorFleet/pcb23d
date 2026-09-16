@@ -4,6 +4,7 @@ import { homedir } from "node:os";
 import { basename, dirname, join, relative, resolve } from "node:path";
 import { fetchRemoteBoard, isRemoteInput, parseBackground, renderPcb, type ModelFetchOptions, type ProjectFiles } from "pcb23d";
 import { parseArgs, USAGE } from "./args";
+import { loadStepConverter } from "./occt";
 
 declare const PCB23D_VERSION: string | undefined;
 const VERSION = typeof PCB23D_VERSION === "string" ? PCB23D_VERSION : "0.1.0-dev";
@@ -61,7 +62,13 @@ async function main(argv: string[]): Promise<number> {
     const stem = basename(fileName).replace(/\.(zip|kicad_pcb)$/i, "") || "board";
     try {
       const result = await renderPcb(bytes, {
-        fetchModels: opts.models ? { ...modelFetchOptions(opts.modelsUrl, opts.quiet || opts.json), ...(project ? { project } : {}) } : false,
+        fetchModels: opts.models
+          ? {
+              ...modelFetchOptions(opts.modelsUrl, opts.quiet || opts.json),
+              ...(project ? { project } : {}),
+              ...(opts.step && project ? { convertStep: lazyStepConverter(opts.occtUrl, opts.quiet || opts.json) } : {}),
+            }
+          : false,
         views: opts.views,
         width: opts.width,
         height: opts.height,
@@ -96,6 +103,15 @@ async function main(argv: string[]): Promise<number> {
   }
   if (opts.json) console.log(JSON.stringify(summaries.length === 1 ? summaries[0] : summaries, null, 2));
   return failures > 0 ? 1 : 0;
+}
+
+/** Defer loading OpenCascade until the first STEP file actually needs converting. */
+function lazyStepConverter(occtUrl: string, quiet: boolean): (bytes: Uint8Array) => Promise<import("pcb23d").ModelMesh | null> {
+  const log = quiet ? () => {} : (m: string) => process.stderr.write(`  ${m}\n`);
+  return async (bytes) => {
+    const convert = await loadStepConverter(occtUrl, log);
+    return convert ? convert(bytes) : null;
+  };
 }
 
 /** Project reader over the directory holding a local .kicad_pcb (for ${KIPRJMOD} models). */

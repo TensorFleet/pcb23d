@@ -23,6 +23,7 @@
       },
       "devDependencies": {
         "@types/bun": "1.2.21",
+        "occt-import-js": "0.0.23",
         "typescript": "5.9.2",
       },
     },
@@ -38,6 +39,7 @@
       },
       "devDependencies": {
         "@types/bun": "1.2.21",
+        "occt-import-js": "0.0.23",
         "typescript": "5.9.2",
         "wrangler": "^4.127.1",
       },
@@ -687,6 +689,8 @@
     "node-mock-http": ["node-mock-http@1.0.5", "", {}, "sha512-KQyt/wLjG3TAc7DOUhpqWzgd4ERxR80JOlTK5VE5R1S12IaPVN5qkj4klBce9HPG1Njuup4Sb5bljaT34lIyjw=="],
 
     "normalize-path": ["normalize-path@3.0.0", "", {}, "sha512-6eZs5Ls3WtCisHWp9S2GUy8dqkpGi4BVSz3GaqiE6ezub0512ESztXUwUB6C6IKbQkY2Pnb/mD4WYojCRwcwLA=="],
+
+    "occt-import-js": ["occt-import-js@0.0.23", "", {}, "sha512-RFfYQXYFX5C1mB1Aywm0ShcUKzXOr/VzTnlzhBSDJOR6YCAPt1HYCzeXWg1vwwjn/cUxwqRNhhtf1dlewoZYCQ=="],
 
     "ofetch": ["ofetch@1.5.1", "", { "dependencies": { "destr": "^2.0.5", "node-fetch-native": "^1.6.7", "ufo": "^1.6.1" } }, "sha512-2W4oUZlVaqAPAil6FUg/difl6YhqhUR7x2eZY4bQCko22UXg3hptq9KLQdqFClV+Wu85UX7hNtdGTngi/1BxcA=="],
 

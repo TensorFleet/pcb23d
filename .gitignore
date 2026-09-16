@@ -13,3 +13,8 @@ coverage/
 .wrangler/
 .cursor/
 /out/
+
+# copied from node_modules/occt-import-js at build time
+apps/web/public/occt/occt-import-js.js
+apps/web/public/occt/occt-import-js.wasm
+apps/web/public/occt/license.*

@@ -3,15 +3,24 @@
   "name": "pcb23d-staging",
   "main": "src/worker.ts",
   "compatibility_date": "2026-09-14",
+  // nodejs_compat: the JPEG encoder behind /img/*.jpg uses Buffer.
+  "compatibility_flags": ["nodejs_compat"],
   "workers_dev": true,
   "observability": { "enabled": true },
+  // Board renders (/img/gh/*) parse + rasterise on the isolate; large boards need the headroom.
+  "limits": { "cpu_ms": 60000 },
+  "vars": { "PCBFIDDLE_ORIGIN": "https://pcbfiddle-staging.floral-lab-08df.workers.dev" },
   "alias": { "pcb23d": "../../packages/core/src/index.ts" },
-  "r2_buckets": [{ "binding": "MODELS", "bucket_name": "pcb23d-models" }],
+  "r2_buckets": [
+    { "binding": "MODELS", "bucket_name": "pcb23d-models" },
+    // Shared with pcbfiddle.com: git snapshots live here, renders go next to them.
+    { "binding": "RENDERS", "bucket_name": "fabplane-opensource-staging" }
+  ],
   "assets": {
     "directory": "./dist",
     "binding": "ASSETS",
     "html_handling": "auto-trailing-slash",
     "not_found_handling": "404-page",
-    "run_worker_first": ["/api/*"]
+    "run_worker_first": ["/api/*", "/img/*"]
   }
 }

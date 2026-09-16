@@ -119,3 +119,47 @@ describe("project-local models", () => {
     expect(noModels.board.modelsUsed).toBe(0);
   });
 });
+
+describe("STEP-only project models", () => {
+  test("uses convertStep for STEP files and for vendored copies of missing library parts", async () => {
+    const { zipSync } = await import("fflate");
+    const { renderPcb, meshFromOcct } = await import("../src/index");
+    const wrl = await fixture("R_0402_1005Metric.wrl");
+    const stepMesh = parseVrml(wrl);
+    const converted: string[] = [];
+    const convertStep = async (bytes: Uint8Array) => {
+      converted.push(new TextDecoder().decode(bytes));
+      return stepMesh;
+    };
+    const board = `(kicad_pcb (version 20241229) (layers (0 "F.Cu" signal) (31 "B.Cu" signal))
+      (footprint "Custom:A" (layer "F.Cu") (at 10 10 0)
+        (fp_rect (start -0.5 -0.25) (end 0.5 0.25) (stroke (width 0.1) (type solid)) (fill no) (layer "F.Fab"))
+        (pad "1" smd rect (at -0.5 0) (size 0.5 0.5) (layers "F.Cu" "F.Mask"))
+        (model "\${KIPRJMOD}/models/OnlyStep.step"))
+      (footprint "Lib:B" (layer "F.Cu") (at 30 10 0)
+        (fp_rect (start -0.5 -0.25) (end 0.5 0.25) (stroke (width 0.1) (type solid)) (fill no) (layer "F.Fab"))
+        (pad "1" smd rect (at -0.5 0) (size 0.5 0.5) (layers "F.Cu" "F.Mask"))
+        (model "\${KICAD8_3DMODEL_DIR}/Connector_JST.3dshapes/NotInMirror.wrl"))
+      (gr_rect (start 0 0) (end 40 20) (layer "Edge.Cuts") (stroke (width 0.1) (type solid)) (fill no)))`;
+    const enc = new TextEncoder();
+    const zip = zipSync({
+      "board.kicad_pcb": enc.encode(board),
+      "models/OnlyStep.step": enc.encode("STEP-A"),
+      "lib/NotInMirror.STEP": enc.encode("STEP-B"),
+    });
+    const missing = (async () => new Response("", { status: 404, headers: { "x-pcb23d-model": "missing" } })) as unknown as typeof fetch;
+    const res = await renderPcb(zip, { views: ["top"], width: 64, height: 48, supersample: 1, png: false, fetchModels: { fetch: missing, convertStep } });
+    expect(res.board.modelsUsed).toBe(2);
+    expect(converted.sort()).toEqual(["STEP-A", "STEP-B"]);
+    // without a converter both stay boxes
+    const boxes = await renderPcb(zip, { views: ["top"], width: 64, height: 48, supersample: 1, png: false, fetchModels: { fetch: missing } });
+    expect(boxes.board.modelsUsed).toBe(0);
+    // occt adapter: indexed triangles with a colour
+    const mesh = meshFromOcct({
+      success: true,
+      meshes: [{ attributes: { position: { array: [0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 1, 0] } }, index: { array: [0, 1, 2, 1, 3, 2] }, color: [1, 0.5, 0] }],
+    });
+    expect(mesh?.triangles).toBe(2);
+    expect(mesh?.groups[0]?.color).toEqual([255, 127.5, 0]);
+  });
+});

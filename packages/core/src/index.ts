@@ -28,6 +28,8 @@ export { assignProjectModelKeys, projectModelPath, joinProjectPath, isProjectKey
 export { projectFromSource, boardDir } from "./input";
 export { githubProject } from "./github";
 export type { ProjectFiles } from "./models/refs";
+export { meshFromOcct, occtStepConverter, isStepPath, OCCT_PARAMS } from "./models/occt";
+export type { OcctModuleLike, OcctResultLike, OcctMeshLike } from "./models/occt";
 export type { ModelMesh, MeshGroup } from "./models/vrml";
 export type { ModelRef, ModelFetcher, ModelFetchOptions } from "./models/refs";
 export type { GithubRef, RemoteBoard, FetchOptions } from "./github";

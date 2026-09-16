@@ -146,7 +146,7 @@ import Base from "../layouts/Base.astro";
         <ol>
           <li><b>Parse.</b> The <code>.kicad_pcb</code> S-expression file is read directly: outline, copper, mask openings, silkscreen, drills, footprints.</li>
           <li><b>Composite.</b> Each side becomes a texture: mask over copper, exposed pads in the board's finish, silkscreen on top, holes cut through.</li>
-          <li><b>Extrude.</b> The outline is triangulated into a slab. Footprints get their real KiCad library model (WRL meshes, converted once at the edge and cached in R2) or a box sized from the fab outline when no library model exists.</li>
+          <li><b>Extrude.</b> The outline is triangulated into a slab. Footprints get their real KiCad library model (WRL meshes, converted once at the edge and cached in R2), project models from the repo (WRL directly, STEP through OpenCascade in a worker), or a box sized from the fab outline.</li>
           <li><b>Rasterize.</b> A z-buffer renderer with supersampling draws each view to PNG. No WebGL, so the same code runs in the CLI.</li>
         </ol>
       </div>
@@ -216,8 +216,9 @@ and the path of every PNG written. Exit code 0 on success, 1 if any input failed
     --no-models                                         # boxes instead of KiCad library 3D models (offline)
 
 Components use the KiCad library's 3D models (fetched from pcbto3d.com's mesh cache or GitHub,
-cached under ~/.cache/pcb23d). Project-local models ($&#123;KIPRJMOD&#125;) are read from the project when a .wrl/.wrz exists next to
-the .step. Footprints with no usable model are drawn as boxes sized from their fab outline. Only the outer copper layers are visible. GitHub inputs use the anonymous
+cached under ~/.cache/pcb23d). Project-local models ($&#123;KIPRJMOD&#125;) are read from the project: .wrl/.wrz directly, .step via
+OpenCascade WASM (downloaded once, 7 MB, to ~/.cache/pcb23d/occt; --no-step skips it).
+Footprints with no usable model are drawn as boxes sized from their fab outline. Only the outer copper layers are visible. GitHub inputs use the anonymous
 API (60 requests/hour) unless GITHUB_TOKEN is set.
 </pre>
     </section>

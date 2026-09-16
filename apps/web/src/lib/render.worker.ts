@@ -6,7 +6,9 @@ import {
   encodePng,
   fetchModels,
   githubProject,
+  meshFromOcct,
   modelKeys,
+  OCCT_PARAMS,
   parseBoard,
   projectFromSource,
   readBoardSource,
@@ -14,6 +16,7 @@ import {
   resolveView,
   type Board,
   type ModelMesh,
+  type OcctResultLike,
   type ProjectFiles,
   type Scene,
 } from "pcb23d";
@@ -29,6 +32,31 @@ const modelCache = new Map<string, ModelMesh>();
 const missingModels = new Set<string>();
 
 const post = (msg: WorkerMessage, transfer: Transferable[] = []) => self.postMessage(msg, transfer);
+
+/** STEP → mesh through OpenCascade in a nested classic worker, started on first use. */
+let occtWorker: Worker | null = null;
+let occtSeq = 0;
+const occtPending = new Map<number, (r: OcctResultLike & { error?: string }) => void>();
+function convertStep(bytes: Uint8Array): Promise<ModelMesh | null> {
+  if (!occtWorker) {
+    occtWorker = new Worker("/occt/convert-worker.js");
+    occtWorker.onmessage = (e: MessageEvent<OcctResultLike & { id: number; error?: string }>) => {
+      const cb = occtPending.get(e.data.id);
+      occtPending.delete(e.data.id);
+      cb?.(e.data);
+    };
+    occtWorker.onerror = () => {
+      for (const cb of occtPending.values()) cb({ success: false, meshes: [], error: "occt worker failed" });
+      occtPending.clear();
+    };
+  }
+  const id = ++occtSeq;
+  const copy = bytes.slice().buffer;
+  return new Promise((resolve) => {
+    occtPending.set(id, (r) => resolve(r.success ? meshFromOcct(r) : null));
+    occtWorker!.postMessage({ id, bytes: copy, params: OCCT_PARAMS }, [copy]);
+  });
+}
 
 self.onmessage = (event: MessageEvent<RenderRequest>) => {
   void handle(event.data);
@@ -75,6 +103,7 @@ async function handle(req: RenderRequest): Promise<void> {
         const fetched = await fetchModels(wanted, {
           apiBase: `${self.location.origin}/api/models`,
           concurrency: 6,
+          convertStep,
           ...(project ? { project } : {}),
           onProgress: (done, total) => post({ type: "models", id: req.id, done, total }),
         });

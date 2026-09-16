@@ -10,3 +10,7 @@
 /agent.md
   Content-Type: text/markdown; charset=utf-8
   Cache-Control: public, max-age=3600
+
+/occt/*
+  Cache-Control: public, max-age=86400
+  Access-Control-Allow-Origin: *

@@ -37,6 +37,7 @@ pcb23d hat.kicad_pcb --views all --mask black # every preset, black mask
 pcb23d *.kicad_pcb -o renders --json          # batch, machine-readable summary
 pcb23d hat.kicad_pcb --views hero=45/30/persp --bg "#ffffff" -w 2400 -h 1800
 pcb23d board.zip --no-models                  # offline: boxes instead of library models
+pcb23d board.zip --no-step                    # skip OpenCascade STEP tessellation
 ```
 
 3D models are converted meshes cached under `~/.cache/pcb23d/models`; the first render of
@@ -114,8 +115,11 @@ a 1600×1200 view takes a few hundred milliseconds).
   set the defaults.
 
 Project-local models (`${KIPRJMOD}/...` or relative paths) are read from the
-zip, the GitHub repo, or the board's directory when a WRL/WRZ twin of the
-referenced file exists; STEP-only project models still fall back to boxes.
+zip, the GitHub repo, or the board's directory. WRL/WRZ files are parsed
+directly; STEP files are tessellated with OpenCascade (`occt-import-js`, a 7 MB
+WASM loaded only when needed: a nested worker in the browser, a cached download
+for the CLI). Library parts missing from the mirror but vendored in the project
+are picked up by name.
 
 Not rendered yet: inner layers, board edge plating. See [docs/architecture.md](docs/architecture.md). Deployment and domains: [docs/cloudflare.md](docs/cloudflare.md).
 

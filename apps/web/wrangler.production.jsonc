@@ -3,8 +3,12 @@
   "name": "pcb23d",
   "main": "src/worker.ts",
   "compatibility_date": "2026-09-14",
+  // nodejs_compat: the JPEG encoder behind /img/*.jpg uses Buffer.
+  "compatibility_flags": ["nodejs_compat"],
   "workers_dev": true,
   "observability": { "enabled": true },
+  // Board renders (/img/gh/*) parse + rasterise on the isolate; large boards need the headroom.
+  "limits": { "cpu_ms": 60000 },
   // pcbto3d.com is the primary site. pcb23d.com and both www hosts 301 to it (src/worker.ts).
   "routes": [
     { "pattern": "pcbto3d.com", "custom_domain": true },
@@ -12,9 +16,13 @@
     { "pattern": "pcb23d.com", "custom_domain": true },
     { "pattern": "www.pcb23d.com", "custom_domain": true }
   ],
-  "vars": { "PRIMARY_HOST": "pcbto3d.com" },
+  "vars": { "PRIMARY_HOST": "pcbto3d.com", "PCBFIDDLE_ORIGIN": "https://pcbfiddle.com" },
   "alias": { "pcb23d": "../../packages/core/src/index.ts" },
-  "r2_buckets": [{ "binding": "MODELS", "bucket_name": "pcb23d-models" }],
+  "r2_buckets": [
+    { "binding": "MODELS", "bucket_name": "pcb23d-models" },
+    // Shared with pcbfiddle.com: git snapshots live here, renders go next to them.
+    { "binding": "RENDERS", "bucket_name": "fabplane-opensource" }
+  ],
   "assets": {
     "directory": "./dist",
     "binding": "ASSETS",

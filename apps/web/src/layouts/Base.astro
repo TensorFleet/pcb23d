@@ -2,8 +2,10 @@
 interface Props {
   title: string;
   description: string;
+  /** Absolute social-card image; switches Twitter to the large-image card. */
+  image?: string;
 }
-const { title, description } = Astro.props;
+const { title, description, image } = Astro.props;
 ---
 
 <!doctype html>
@@ -15,8 +17,24 @@ const { title, description } = Astro.props;
     <meta name="generator" content={Astro.generator} />
     <link rel="canonical" href={Astro.url} />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="PCB23D" />
     <meta property="og:title" content={title} />
     <meta property="og:description" content={description} />
+    <meta property="og:url" content={Astro.url} />
+    {
+      image ? (
+        <>
+          <meta property="og:image" content={image} />
+          <meta property="og:image:width" content="1200" />
+          <meta property="og:image:height" content="630" />
+          <meta name="twitter:card" content="summary_large_image" />
+          <meta name="twitter:image" content={image} />
+        </>
+      ) : (
+        <meta name="twitter:card" content="summary" />
+      )
+    }
     <title>{title}</title>
     <script is:inline>
       if (localStorage.getItem("pcb23d-theme") === "light") {
@@ -28,9 +46,9 @@ const { title, description } = Astro.props;
     <header class="site-header">
       <a class="logo" href="/" aria-label="PCB23D home">pcb<span class="logo-accent">2</span>3D</a>
       <nav class="site-nav">
-        <a href="#how">How it works</a>
-        <a href="#library">Library &amp; CLI</a>
-        <a href="#agent">For agents</a>
+        <a href="/#how">How it works</a>
+        <a href="/#library">Library &amp; CLI</a>
+        <a href="/#agent">For agents</a>
         <a href="https://github.com/TensorFleet/pcb23d">GitHub</a>
       </nav>
     </header>
