@@ -18,6 +18,8 @@ import { buildFaceTexture, type Texture, type TextureOptions } from "./texture";
 export { parseBoard, buildMesh, renderMesh, encodePng, buildFaceTexture, buildPalette, parseColor, readBoardSource, resolveView, VIEWS };
 export { parseSExpr } from "./sexpr";
 export { pickBoardPath, isZip } from "./input";
+export { parseGithubUrl, fetchGithubBoard, fetchRemoteBoard, isRemoteInput } from "./github";
+export type { GithubRef, RemoteBoard, FetchOptions } from "./github";
 export { kicadKind, pickMainDocument } from "./kicad/files";
 export { estimateHeight } from "./kicad/heights";
 export type { Board, BoardStats, Component, Hole, Mesh, Palette, RGB, RgbaImage, Texture, TextureOptions, ViewName, ViewSpec, RenderOptions, BoardSource };

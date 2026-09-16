@@ -22,7 +22,11 @@ export interface CliOptions {
 export const USAGE = `pcb23d — render KiCad boards to 3D PNG images
 
 Usage:
-  pcb23d <board.kicad_pcb | project.zip> [more inputs...] [options]
+  pcb23d <board.kicad_pcb | project.zip | github URL | owner/repo> [more inputs...] [options]
+
+Inputs can be local files or GitHub references: https://github.com/owner/repo,
+https://github.com/owner/repo/tree/main/hw, owner/repo@ref/path, or a direct link to a
+.kicad_pcb / .zip. Set GITHUB_TOKEN to lift the anonymous API rate limit.
 
 Options:
   -o, --out <dir>          Output directory (default: ./pcb23d-out)

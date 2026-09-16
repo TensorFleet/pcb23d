@@ -29,6 +29,7 @@ import {
 } from "../geometry";
 import { atoms, child, children, flag, head, isList, num, numbers, parseSExpr, str, type SExpr } from "../sexpr";
 import { estimateHeight, isBodilessFootprint } from "./heights";
+import { defaultThickness, textStrokes, type HAlign, type TextStyle, type VAlign } from "../font/text";
 
 export type Side = "front" | "back";
 
@@ -123,6 +124,9 @@ export function parseBoard(text: string): Board {
       case "gr_poly":
       case "gr_curve":
         ctx.graphic(item, IDENTITY);
+        break;
+      case "gr_text":
+        ctx.text(item, IDENTITY, typeof item[1] === "string" ? item[1] : "", {});
         break;
       case "footprint":
       case "module":
@@ -369,9 +373,20 @@ class ParseContext {
     const padBounds = emptyBounds();
     let hasBodyPad = false;
 
+    const vars = { reference, value };
     for (const sub of item) {
       if (!isList(sub)) continue;
       const h = head(sub);
+      if (h === "fp_text") {
+        // (fp_text reference|value|user "text" (at ..) (layer ..) [hide] (effects ..))
+        if (typeof sub[2] === "string") this.text(sub, t, sub[2], vars);
+        continue;
+      }
+      if (h === "property") {
+        // KiCad 8+: (property "Reference" "R1" (at ..) (layer ..) (hide yes) (effects ..))
+        if (typeof sub[2] === "string" && child(sub, "layer") && child(sub, "at")) this.text(sub, t, sub[2], vars);
+        continue;
+      }
       if (h === "pad") {
         this.stats.pads++;
         const info = this.pad(sub, t, fpMaskMargin);
@@ -421,6 +436,27 @@ class ParseContext {
       height,
       outline,
     });
+  }
+
+  /** gr_text / fp_text / footprint property → stroked glyph outlines on the text's layer. */
+  text(item: SExpr[], t: Transform, raw: string, vars: { reference?: string; value?: string }): void {
+    const layer = str(item, "layer");
+    if (!layer || !(layer.endsWith(".SilkS") || layer.endsWith(".Cu") || layer.endsWith(".Mask"))) return;
+    if (isHidden(item)) return;
+    const atNums = numbers(child(item, "at"));
+    if (atNums.length < 2) return;
+    const text = raw
+      .replace(/\$\{REFERENCE\}/g, vars.reference ?? "")
+      .replace(/\$\{VALUE\}/g, vars.value ?? "")
+      .trim();
+    if (!text) return;
+    const style = parseTextStyle(child(item, "effects"));
+    if (style.sizeX <= 0 || style.sizeY <= 0) return;
+    const at = apply(t, { x: atNums[0]!, y: atNums[1]! });
+    const angle = atNums[2] ?? 0; // stored absolute, like pad orientation
+    const rings: Ring[] = [];
+    for (const stroke of textStrokes(text, at, angle, style)) rings.push(...strokePolyline(stroke, style.thickness));
+    this.push(layer, rings);
   }
 
   pad(item: SExpr[], fp: Transform, fpMaskMargin: number | undefined): { type: string; localRing: Ring } | null {
@@ -820,6 +856,35 @@ export function buildOutline(paths: Vec2[][], rings: Ring[]): Polygon[] {
     else polys.push({ outer: ring, holes: [] });
   }
   return polys;
+}
+
+function isHidden(item: SExpr[]): boolean {
+  const hide = child(item, "hide");
+  if (hide) {
+    const v = atoms(hide)[0];
+    return v === undefined || v === "yes" || v === "true";
+  }
+  if (item.some((x) => x === "hide")) return true;
+  const effects = child(item, "effects");
+  return effects ? effects.some((x) => x === "hide") || flag(effects, "hide") : false;
+}
+
+export function parseTextStyle(effects: SExpr[] | undefined): TextStyle {
+  const font = child(effects, "font");
+  const size = numbers(child(font, "size"));
+  const sizeY = size[0] ?? 1;
+  const sizeX = size[1] ?? sizeY;
+  const bold = flag(font, "bold");
+  const italic = flag(font, "italic");
+  const thickness = numbers(child(font, "thickness"))[0] ?? defaultThickness(sizeX, bold);
+  const justify = atoms(child(effects, "justify"));
+  let halign: HAlign = "center";
+  let valign: VAlign = "center";
+  if (justify.includes("left")) halign = "left";
+  if (justify.includes("right")) halign = "right";
+  if (justify.includes("top")) valign = "top";
+  if (justify.includes("bottom")) valign = "bottom";
+  return { sizeX, sizeY, thickness, bold, italic, halign, valign, mirror: justify.includes("mirror") };
 }
 
 export { boundsOf, ringArea, flag };

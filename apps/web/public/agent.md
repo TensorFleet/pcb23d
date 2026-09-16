@@ -31,6 +31,7 @@ for the board; the `.kicad_pro`'s sibling `.kicad_pcb` wins, backups are ignored
 
     ./pcb23d path/to/project.zip --out renders --json
     ./pcb23d path/to/board.kicad_pcb --out renders --views top,bottom,angle
+    ./pcb23d https://github.com/owner/repo --out renders --json      # public GitHub repo, tree URL, or owner/repo
 
 Outputs land in `--out` as `<input-stem>-<view>.png` (transparent background by default).
 `--json` prints a summary to stdout: board size in mm, layer count, footprint/track/via counts,
@@ -45,5 +46,6 @@ and the path of every PNG written. Exit code 0 on success, 1 if any input failed
     --mask black --finish silver --silk white           # override board colours
     --no-components                                     # bare board, no body boxes
 
-Limits to tell the user about: silkscreen text and footprint 3D models are not drawn
-(components are boxes sized from fab outlines); only the outer copper layers are visible.
+Limits to tell the user about: footprint 3D models are not drawn (components are boxes sized
+from fab outlines); only the outer copper layers are visible. GitHub inputs use the anonymous
+API (60 requests/hour) unless GITHUB_TOKEN is set.

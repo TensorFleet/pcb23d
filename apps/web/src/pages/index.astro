@@ -12,10 +12,28 @@ import Base from "../layouts/Base.astro";
         <p class="kicker"><span></span> KiCad → 3D, no upload</p>
         <h1>Drop a board.<br /><em>Get the render.</em></h1>
         <p class="hero-lede">
-          A KiCad project zip or a bare <code>.kicad_pcb</code> becomes top, bottom, and angled 3D
-          PNGs. Everything runs in this tab.
+          Paste a GitHub repo, or drop a project zip or bare <code>.kicad_pcb</code>. You get top,
+          bottom, and angled 3D PNGs with silkscreen. Everything renders in this tab.
         </p>
       </div>
+
+      <form class="url-form" id="url-form" autocomplete="off">
+        <label class="url-prompt" for="url-input">
+          <span class="spark" aria-hidden="true">▦</span>
+          <span class="url-field">
+            <small>GitHub repo or board URL</small>
+            <input
+              id="url-input"
+              name="url"
+              type="text"
+              spellcheck="false"
+              placeholder="github.com/owner/repo, owner/repo, or a link to a .kicad_pcb"
+            />
+          </span>
+          <button type="submit" aria-label="Fetch and render">→</button>
+        </label>
+        <p class="url-hint">Public repos only. The board is fetched straight from GitHub by your browser, nothing goes through a server.</p>
+      </form>
 
       <div class="drop" id="drop-zone" tabindex="0" role="button" aria-label="Drop a KiCad zip or board file">
         <div class="drop-board" aria-hidden="true">
@@ -177,6 +195,7 @@ for the board; the `.kicad_pro`'s sibling `.kicad_pcb` wins, backups are ignored
 
     ./pcb23d path/to/project.zip --out renders --json
     ./pcb23d path/to/board.kicad_pcb --out renders --views top,bottom,angle
+    ./pcb23d https://github.com/owner/repo --out renders --json      # public GitHub repo, tree URL, or owner/repo
 
 Outputs land in `--out` as `&lt;input-stem>-&lt;view>.png` (transparent background by default).
 `--json` prints a summary to stdout: board size in mm, layer count, footprint/track/via counts,
@@ -191,8 +210,9 @@ and the path of every PNG written. Exit code 0 on success, 1 if any input failed
     --mask black --finish silver --silk white           # override board colours
     --no-components                                     # bare board, no body boxes
 
-Limits to tell the user about: silkscreen text and footprint 3D models are not drawn
-(components are boxes sized from fab outlines); only the outer copper layers are visible.
+Limits to tell the user about: footprint 3D models are not drawn (components are boxes sized
+from fab outlines); only the outer copper layers are visible. GitHub inputs use the anonymous
+API (60 requests/hour) unless GITHUB_TOKEN is set.
 </pre>
     </section>
 
@@ -233,10 +253,13 @@ pcb23d hat.kicad_pcb --views hero=45/30 --bg #ffffff</code></pre>
 
 <script>
   import { zipSync } from "fflate";
+  import { fetchRemoteBoard, isRemoteInput } from "pcb23d";
   import type { RenderRequest, WorkerMessage, BoardSummary } from "../lib/protocol";
 
   const $ = <T extends Element>(sel: string) => document.querySelector<T>(sel)!;
   const drop = $<HTMLDivElement>("#drop-zone");
+  const urlForm = $<HTMLFormElement>("#url-form");
+  const urlInput = $<HTMLInputElement>("#url-input");
   const picker = $<HTMLButtonElement>("#pick-file");
   const tryExample = $<HTMLButtonElement>("#try-example");
   const fileInput = $<HTMLInputElement>("#file-input");
@@ -406,6 +429,46 @@ pcb23d hat.kicad_pcb --views hero=45/30 --bg #ffffff</code></pre>
     send(STANDARD_VIEWS, await file.arrayBuffer(), name);
   }
 
+  async function openUrl(raw: string) {
+    const input = raw.trim();
+    if (!input) return;
+    if (!isRemoteInput(input)) {
+      showError("Enter a GitHub URL, owner/repo, or a direct link to a .kicad_pcb or .zip.");
+      return;
+    }
+    const button = urlForm.querySelector<HTMLButtonElement>("button");
+    if (button) button.disabled = true;
+    errorEl.hidden = true;
+    try {
+      const remote = await fetchRemoteBoard(input);
+      const name = remote.path.split("/").pop() || "board.kicad_pcb";
+      await openFile(new File([remote.bytes as BlobPart], name));
+      history.replaceState(null, "", `#url=${encodeURIComponent(input)}`);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      showError(/failed to fetch|networkerror|cors/i.test(message) ? `${message}. That host does not allow browser downloads; download the file and drop it here instead.` : message);
+    } finally {
+      if (button) button.disabled = false;
+    }
+  }
+  urlForm.addEventListener("submit", (e) => {
+    e.preventDefault();
+    void openUrl(urlInput.value);
+  });
+  urlInput.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      void openUrl(urlInput.value);
+    }
+  });
+  {
+    const m = /[#&]url=([^&]+)/.exec(location.hash);
+    if (m) {
+      urlInput.value = decodeURIComponent(m[1]!);
+      void openUrl(urlInput.value);
+    }
+  }
+
   picker.addEventListener("click", () => fileInput.click());
   fileInput.addEventListener("change", () => {
     const f = fileInput.files?.[0];
@@ -536,12 +599,75 @@ pcb23d hat.kicad_pcb --views hero=45/30 --bg #ffffff</code></pre>
     color: var(--ink);
     font-size: 0.92em;
   }
+  .url-form {
+    width: min(760px, 100%);
+    margin: 40px auto 0;
+  }
+  .url-prompt {
+    min-height: 74px;
+    padding: 12px 14px 12px 20px;
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    align-items: center;
+    gap: 14px;
+    background: var(--paper-3);
+    border: 1px solid var(--line-2);
+    border-radius: 14px;
+    box-shadow: 0 18px 55px #0006;
+  }
+  .url-prompt .spark {
+    display: grid;
+    place-items: center;
+    width: 34px;
+    height: 34px;
+    color: var(--acid);
+    background: color-mix(in srgb, var(--acid) 14%, var(--paper-2));
+    border-radius: 9px;
+  }
+  .url-field small {
+    display: block;
+    margin-bottom: 4px;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.14em;
+    font: 700 9px ui-monospace, monospace;
+  }
+  .url-field input {
+    width: 100%;
+    border: 0;
+    background: transparent;
+    color: var(--ink);
+    font-size: 16px;
+    outline: none;
+  }
+  .url-prompt button {
+    display: grid;
+    place-items: center;
+    width: 46px;
+    height: 46px;
+    background: var(--acid);
+    color: #162013;
+    border: 0;
+    border-radius: 10px;
+    font-size: 22px;
+    cursor: pointer;
+  }
+  .url-prompt button:disabled {
+    opacity: 0.5;
+    cursor: progress;
+  }
+  .url-hint {
+    margin: 10px 4px 0;
+    color: var(--muted);
+    font-size: 12px;
+    text-align: center;
+  }
   .drop {
     display: grid;
     grid-template-columns: 220px 1fr;
     gap: 28px;
     align-items: center;
-    margin: 44px auto 0;
+    margin: 18px auto 0;
     max-width: 760px;
     padding: 22px;
     border: 1px dashed var(--line-2);

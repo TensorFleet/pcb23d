@@ -1,7 +1,7 @@
 #!/usr/bin/env bun
 import { mkdir } from "node:fs/promises";
 import { basename, join } from "node:path";
-import { parseBackground, renderPcb } from "pcb23d";
+import { fetchRemoteBoard, isRemoteInput, parseBackground, renderPcb } from "pcb23d";
 import { parseArgs, USAGE } from "./args";
 
 declare const PCB23D_VERSION: string | undefined;
@@ -31,15 +31,29 @@ async function main(argv: string[]): Promise<number> {
   const summaries: unknown[] = [];
   let failures = 0;
   for (const input of opts.inputs) {
-    const file = Bun.file(input);
-    if (!(await file.exists())) {
-      console.error(`pcb23d: ${input}: no such file`);
+    let bytes: Uint8Array;
+    let fileName = basename(input);
+    const started = performance.now();
+    try {
+      if (isRemoteInput(input)) {
+        const remote = await fetchRemoteBoard(input, {
+          ...(process.env.GITHUB_TOKEN ? { token: process.env.GITHUB_TOKEN } : {}),
+        });
+        bytes = remote.bytes;
+        fileName = basename(remote.path);
+        if (!opts.quiet && !opts.json) console.error(`${input}: fetched ${remote.path}${remote.ref ? ` @${remote.ref}` : ""}`);
+      } else {
+        const file = Bun.file(input);
+        if (!(await file.exists())) throw new Error("no such file");
+        bytes = new Uint8Array(await file.arrayBuffer());
+      }
+    } catch (error) {
       failures++;
+      console.error(`pcb23d: ${input}: ${(error as Error).message}`);
+      summaries.push({ input, error: (error as Error).message });
       continue;
     }
-    const bytes = new Uint8Array(await file.arrayBuffer());
-    const stem = basename(input).replace(/\.(zip|kicad_pcb)$/i, "");
-    const started = performance.now();
+    const stem = fileName.replace(/\.(zip|kicad_pcb)$/i, "") || "board";
     try {
       const result = await renderPcb(bytes, {
         views: opts.views,
@@ -48,7 +62,7 @@ async function main(argv: string[]): Promise<number> {
         supersample: opts.supersample,
         background: parseBackground(opts.background),
         components: opts.components,
-        fileName: basename(input),
+        fileName,
         ...(opts.maskColor ? { maskColor: opts.maskColor } : {}),
         ...(opts.silkColor ? { silkColor: opts.silkColor } : {}),
         ...(opts.copperFinish ? { copperFinish: opts.copperFinish } : {}),

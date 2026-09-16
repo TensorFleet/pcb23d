@@ -32,6 +32,7 @@ bun run build:cli:all                # linux/darwin/windows binaries
 
 ```bash
 pcb23d board.zip                              # top, bottom, angle → ./pcb23d-out/
+pcb23d https://github.com/owner/repo          # public GitHub repo, tree URL, or owner/repo
 pcb23d hat.kicad_pcb --views all --mask black # every preset, black mask
 pcb23d *.kicad_pcb -o renders --json          # batch, machine-readable summary
 pcb23d hat.kicad_pcb --views hero=45/30/persp --bg "#ffffff" -w 2400 -h 1800
@@ -94,14 +95,15 @@ a 1600×1200 view takes a few hundred milliseconds).
   trapezoid, custom primitives), and zone fills. Copper under the mask shows as a
   lighter mask tint; mask openings show the finish colour.
 - Soldermask openings including expansion, via tenting (board default and
-  per-via overrides), silkscreen graphics, and drill holes (round and slots).
+  per-via overrides), silkscreen graphics and text (KiCad's Newstroke font, with
+  justification, mirroring, rotation, italic), and drill holes (round and slots).
 - Components as boxes from the `F.Fab`/`B.Fab` outline (or courtyard, or pads),
   with heights from IPC-7351 names (`RESC1005X40N` → 0.40 mm) or package
   families. Mounting holes, test points, and fiducials are skipped.
 - Stackup colours: `(color "Green")` on `F.Mask`/`F.SilkS` and `copper_finish`
   set the defaults.
 
-Not rendered yet: silkscreen text, STEP/VRML models, inner layers, board edge
+Not rendered yet: STEP/VRML models, inner layers, board edge
 plating. See [docs/architecture.md](docs/architecture.md). Deployment and domains: [docs/cloudflare.md](docs/cloudflare.md).
 
 ## Web app
