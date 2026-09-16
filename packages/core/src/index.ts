@@ -12,6 +12,7 @@ import { boardDir, projectFromSource, readBoardSource, type BoardSource } from "
 import { parseBoard, type Board, type BoardStats, type Component, type Hole } from "./kicad/board";
 import { buildMesh, type Mesh } from "./mesh";
 import { assignProjectModelKeys, fetchModels, type ModelFetchOptions } from "./models/refs";
+import { attachLcscModels } from "./models/lcsc";
 import type { ModelMesh } from "./models/vrml";
 import { encodePng } from "./png";
 import { renderMesh, resolveView, VIEWS, type RenderOptions, type RgbaImage, type ViewName, type ViewSpec } from "./render";
@@ -24,7 +25,10 @@ export { parseGithubUrl, fetchGithubBoard, fetchRemoteBoard, isRemoteInput } fro
 export { parseVrml } from "./models/vrml";
 export { encodeMesh, decodeMesh } from "./models/mesh-format";
 export { modelKey, isValidModelKey, modelRawUrl, modelStepUrl, modelApiUrl, fetchModel, fetchModels, DEFAULT_MODEL_API, KICAD_PACKAGES3D_RAW, KICAD_PACKAGES3D_GITLAB } from "./models/refs";
-export { assignProjectModelKeys, projectModelPath, joinProjectPath, isProjectKey, PROJECT_KEY_PREFIX } from "./models/refs";
+export { assignProjectModelKeys, projectModelPath, joinProjectPath, isProjectKey, PROJECT_KEY_PREFIX, DEFAULT_LCSC_API } from "./models/refs";
+export { lcscFromProperties, parseEasyedaComponent, parseEasyedaObj, fetchEasyedaModel, easyedaComponentUrl, easyedaModelUrl, LCSC_KEY_PREFIX } from "./models/easyeda";
+export type { EasyedaModelInfo } from "./models/easyeda";
+export { attachLcscModels, fetchLcscModel, lcscCandidates } from "./models/lcsc";
 export { projectFromSource, boardDir } from "./input";
 export { githubProject } from "./github";
 export type { ProjectFiles } from "./models/refs";
@@ -96,6 +100,8 @@ export interface RenderPcbOptions extends SceneOptions, RenderOptions {
   fileName?: string;
   /** @internal archive listing carried over when the board was already extracted. */
   sourcePaths?: string[];
+  /** @internal components with LCSC models already attached (renderPcb → renderPcbSync). */
+  lcscComponents?: Component[];
 }
 
 export interface RenderedView {
@@ -145,7 +151,8 @@ export async function renderPcb(input: Uint8Array | string, options: RenderPcbOp
     if (project) fetchOpts.project = project;
   }
   const models = await fetchModels(modelKeys(board), fetchOpts);
-  return renderPcbSync(source.text, { ...options, models, fileName: source.path, sourcePaths: source.archivePaths });
+  if (fetchOpts.lcscApiBase !== "") await attachLcscModels(board.components, models, fetchOpts);
+  return renderPcbSync(source.text, { ...options, models, fileName: source.path, sourcePaths: source.archivePaths, lcscComponents: board.components });
 }
 
 export function renderPcbSync(input: Uint8Array | string, options: RenderPcbOptions = {}): RenderPcbResult {
@@ -154,6 +161,13 @@ export function renderPcbSync(input: Uint8Array | string, options: RenderPcbOpti
   if (options.sourcePaths) source.archivePaths = options.sourcePaths;
   const board = parseBoard(source.text);
   assignProjectModelKeys(board.components, boardDir(source.path));
+  if (options.lcscComponents) {
+    // carry synthetic lcsc: model references over from the async pass
+    for (let i = 0; i < board.components.length && i < options.lcscComponents.length; i++) {
+      const extra = options.lcscComponents[i]!.models.filter((m) => m.key?.startsWith("lcsc:"));
+      if (extra.length) board.components[i]!.models.push(...extra);
+    }
+  }
   const t1 = now();
   const scene = buildScene(board, options);
   const t2 = now();

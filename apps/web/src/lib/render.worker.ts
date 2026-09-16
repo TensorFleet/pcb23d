@@ -1,6 +1,7 @@
 /// <reference lib="webworker" />
 import {
   assignProjectModelKeys,
+  attachLcscModels,
   boardDir,
   buildScene,
   encodePng,
@@ -118,6 +119,17 @@ async function handle(req: RenderRequest): Promise<void> {
         const m = modelCache.get(k);
         if (m) models.set(k, m);
       }
+      // LCSC-tagged footprints that still have no model: EasyEDA via the site's cache
+      if (!board.components.some((c) => c.models.some((m) => m.key?.startsWith("lcsc:")))) {
+        post({ type: "models", id: req.id, done: 0, total: 0 });
+        await attachLcscModels(board.components, models, {
+          lcscApiBase: `${self.location.origin}/api/lcsc`,
+          concurrency: 4,
+        });
+      } else {
+        for (const c of board.components) for (const m of c.models) if (m.key?.startsWith("lcsc:") && modelCache.has(m.key)) models.set(m.key, modelCache.get(m.key)!);
+      }
+      for (const [k, m] of models) if (k.startsWith("lcsc:")) modelCache.set(k, m);
     }
     const key = JSON.stringify(req.scene);
     if (!scene || key !== sceneKey) {

@@ -11,6 +11,7 @@
 import type { Env, ExecutionContextLike } from "./edge/env";
 import { parseImagePath } from "./edge/gh";
 import { handleImage, handlePage, handlePickerPage } from "./edge/img";
+import { handleLcsc } from "./edge/lcsc";
 import { handleModel } from "./edge/models";
 
 export type { Env } from "./edge/env";
@@ -30,6 +31,7 @@ export default {
       }
     }
     if (url.pathname.startsWith("/api/models/")) return handleModel(request, env, ctx, url);
+    if (url.pathname.startsWith("/api/lcsc/")) return handleLcsc(request, env, ctx, url);
     if (url.pathname === "/api/health") {
       return Response.json({
         ok: true,

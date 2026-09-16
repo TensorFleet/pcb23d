@@ -58,6 +58,8 @@ export interface Component {
   height: number;
   /** World-space body outline (4 corners). */
   outline: Ring;
+  /** Footprint properties (Reference, Value, LCSC, MPN, ...). */
+  properties: Record<string, string>;
   /** 3D model references from the footprint, in file order. */
   models: ModelRef[];
   /** True when no body box should be drawn if the model is unavailable (test points, holes). */
@@ -362,7 +364,9 @@ class ParseContext {
     const attrs = atoms(child(item, "attr"));
     let reference = "";
     let value = "";
+    const properties: Record<string, string> = {};
     for (const prop of children(item, "property")) {
+      if (typeof prop[1] === "string" && typeof prop[2] === "string") properties[prop[1]] = prop[2];
       if (prop[1] === "Reference" && typeof prop[2] === "string") reference = prop[2];
       if (prop[1] === "Value" && typeof prop[2] === "string") value = prop[2];
     }
@@ -443,6 +447,7 @@ class ParseContext {
       bodyHeight,
       height,
       outline,
+      properties,
       models,
       // a box only makes sense when the footprint has a real body footprint
       ...(bodiless ? { boxless: true } : {}),

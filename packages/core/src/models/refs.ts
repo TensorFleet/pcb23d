@@ -29,6 +29,7 @@ export interface ModelRef {
 
 export const DEFAULT_MODEL_API = "https://pcbto3d.com/api/models";
 export const PROJECT_KEY_PREFIX = "project:";
+export const DEFAULT_LCSC_API = "https://pcbto3d.com/api/lcsc";
 export const KICAD_PACKAGES3D_RAW = "https://raw.githubusercontent.com/KiCad/kicad-packages3D/master";
 
 const KEY_RE = /^[\w.+-]+\.3dshapes\/[\w .,+()#&'~-]+\.wrl$/;
@@ -193,6 +194,11 @@ export interface ModelFetchOptions {
    * it those parts fall back to boxes.
    */
   convertStep?: (bytes: Uint8Array) => Promise<ModelMesh | null>;
+  /**
+   * EasyEDA/LCSC models for footprints with an LCSC property and no other model. The pcb23d API
+   * proxies and caches EasyEDA; empty string disables the lookup.
+   */
+  lcscApiBase?: string;
   onProgress?: (done: number, total: number, key: string) => void;
 }
 
