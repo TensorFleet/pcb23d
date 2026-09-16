@@ -117,6 +117,10 @@ import Base from "../layouts/Base.astro";
             <input type="checkbox" id="opt-components" checked />
             <span>Component bodies</span>
           </label>
+          <label class="check">
+            <input type="checkbox" id="opt-models" checked />
+            <span>3D models from the KiCad library</span>
+          </label>
 
           <h3>Custom angle</h3>
           <label class="range">
@@ -142,7 +146,7 @@ import Base from "../layouts/Base.astro";
         <ol>
           <li><b>Parse.</b> The <code>.kicad_pcb</code> S-expression file is read directly: outline, copper, mask openings, silkscreen, drills, footprints.</li>
           <li><b>Composite.</b> Each side becomes a texture: mask over copper, exposed pads in the board's finish, silkscreen on top, holes cut through.</li>
-          <li><b>Extrude.</b> The outline is triangulated into a slab; footprints become boxes sized from their fab outline and IPC-7351 names.</li>
+          <li><b>Extrude.</b> The outline is triangulated into a slab. Footprints get their real KiCad library model (WRL meshes, converted once at the edge and cached in R2) or a box sized from the fab outline when no library model exists.</li>
           <li><b>Rasterize.</b> A z-buffer renderer with supersampling draws each view to PNG. No WebGL, so the same code runs in the CLI.</li>
         </ol>
       </div>
@@ -208,10 +212,12 @@ and the path of every PNG written. Exit code 0 on success, 1 if any input failed
     --width 1600 --height 1200 --supersample 2          # image size, anti-aliasing 1-4
     --bg "#ffffff"                                      # or transparent (default)
     --mask black --finish silver --silk white           # override board colours
-    --no-components                                     # bare board, no body boxes
+    --no-components                                     # bare board, no bodies
+    --no-models                                         # boxes instead of KiCad library 3D models (offline)
 
-Limits to tell the user about: footprint 3D models are not drawn (components are boxes sized
-from fab outlines); only the outer copper layers are visible. GitHub inputs use the anonymous
+Components use the KiCad library's 3D models (fetched from pcbto3d.com's mesh cache or GitHub,
+cached under ~/.cache/pcb23d). Footprints without a library model, or project-local models,
+are drawn as boxes sized from their fab outline. Only the outer copper layers are visible. GitHub inputs use the anonymous
 API (60 requests/hour) unless GITHUB_TOKEN is set.
 </pre>
     </section>
@@ -279,6 +285,7 @@ pcb23d hat.kicad_pcb --views hero=45/30 --bg #ffffff</code></pre>
   const optFinish = $<HTMLSelectElement>("#opt-finish");
   const optSize = $<HTMLSelectElement>("#opt-size");
   const optComponents = $<HTMLInputElement>("#opt-components");
+  const optModels = $<HTMLInputElement>("#opt-models");
   const optAz = $<HTMLInputElement>("#opt-az");
   const optEl = $<HTMLInputElement>("#opt-el");
   const azOut = $<HTMLOutputElement>("#az-out");
@@ -320,6 +327,7 @@ pcb23d hat.kicad_pcb --views hero=45/30 --bg #ffffff</code></pre>
       ...(optMask.value ? { maskColor: optMask.value } : {}),
       ...(optFinish.value ? { copperFinish: optFinish.value } : {}),
       components: optComponents.checked,
+      models: optModels.checked,
       pixelsPerMm: 16,
     };
   }
@@ -360,6 +368,11 @@ pcb23d hat.kicad_pcb --views hero=45/30 --bg #ffffff</code></pre>
       resultTitle.textContent = msg.board.title || msg.board.path.split("/").pop() || "Board";
       resultMeta.textContent = `${msg.board.widthMm} × ${msg.board.heightMm} mm · ${msg.board.thickness} mm · ${s.copperLayers} copper layers · ${s.footprints} footprints · ${s.tracks} tracks · ${s.vias} vias${msg.board.outlineFromEdgeCuts ? "" : " · no Edge.Cuts, outline estimated"}`;
       progressText.textContent = "Rendering top…";
+      return;
+    }
+    if (msg.type === "models") {
+      progress.hidden = false;
+      progressText.textContent = msg.done < msg.total ? `Fetching 3D models ${msg.done}/${msg.total}…` : "Building scene…";
       return;
     }
     if (msg.type === "image") {
@@ -521,6 +534,7 @@ pcb23d hat.kicad_pcb --views hero=45/30 --bg #ffffff</code></pre>
   optFinish.addEventListener("change", rerender);
   optSize.addEventListener("change", rerender);
   optComponents.addEventListener("change", rerender);
+  optModels.addEventListener("change", rerender);
   optAz.addEventListener("input", () => (azOut.value = `${optAz.value}°`));
   optEl.addEventListener("input", () => (elOut.value = `${optEl.value}°`));
   function customView(): RenderRequest["views"][number] {

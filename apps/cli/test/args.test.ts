@@ -17,6 +17,8 @@ describe("parseArgs", () => {
     expect(o.maskColor).toBe("black");
     expect(o.components).toBe(false);
     expect(o.json).toBe(true);
+    expect(o.models).toBe(true);
+    expect(parseArgs(["--no-models", "--models-url", "http://localhost:8787/api/models", "x"]).models).toBe(false);
   });
   test("rejects bad values", () => {
     expect(() => parseArgs(["--width", "abc", "x"])).toThrow(/--width/);

@@ -5,11 +5,13 @@
   "compatibility_date": "2026-09-14",
   "workers_dev": true,
   "observability": { "enabled": true },
+  "alias": { "pcb23d": "../../packages/core/src/index.ts" },
+  "r2_buckets": [{ "binding": "MODELS", "bucket_name": "pcb23d-models" }],
   "assets": {
     "directory": "./dist",
     "binding": "ASSETS",
     "html_handling": "auto-trailing-slash",
     "not_found_handling": "404-page",
-    "run_worker_first": false
+    "run_worker_first": ["/api/*"]
   }
 }

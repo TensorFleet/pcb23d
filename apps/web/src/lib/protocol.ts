@@ -5,6 +5,8 @@ export interface SceneRequestOptions {
   silkColor?: string;
   copperFinish?: string;
   components: boolean;
+  /** Fetch real 3D models for footprints (library WRL via /api/models). */
+  models: boolean;
   pixelsPerMm: number;
 }
 
@@ -36,6 +38,7 @@ export interface BoardSummary {
 
 export type WorkerMessage =
   | { type: "parsed"; id: number; board: BoardSummary }
+  | { type: "models"; id: number; done: number; total: number }
   | { type: "image"; id: number; name: string; width: number; height: number; png: ArrayBuffer; ms: number }
   | { type: "done"; id: number }
   | { type: "error"; id: number; message: string };

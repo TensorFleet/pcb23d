@@ -1,16 +1,22 @@
 /// <reference lib="webworker" />
-import { buildScene, encodePng, parseBoard, readBoardSource, renderMesh, resolveView, type Board, type Scene } from "pcb23d";
+import { buildScene, encodePng, fetchModels, modelKeys, parseBoard, readBoardSource, renderMesh, resolveView, type Board, type ModelMesh, type Scene } from "pcb23d";
 import type { RenderRequest, WorkerMessage } from "./protocol";
 
 let board: Board | null = null;
 let boardPath = "";
 let scene: Scene | null = null;
 let sceneKey = "";
+/** Converted models, kept for the life of the worker (keys are library paths). */
+const modelCache = new Map<string, ModelMesh>();
+const missingModels = new Set<string>();
 
 const post = (msg: WorkerMessage, transfer: Transferable[] = []) => self.postMessage(msg, transfer);
 
 self.onmessage = (event: MessageEvent<RenderRequest>) => {
-  const req = event.data;
+  void handle(event.data);
+};
+
+async function handle(req: RenderRequest): Promise<void> {
   if (req.type !== "render") return;
   try {
     if (req.bytes) {
@@ -39,12 +45,35 @@ self.onmessage = (event: MessageEvent<RenderRequest>) => {
       });
     }
     if (!board) throw new Error("no board loaded");
+    let models: Map<string, ModelMesh> | undefined;
+    if (req.scene.models && req.scene.components) {
+      const wanted = modelKeys(board).filter((k) => !modelCache.has(k) && !missingModels.has(k));
+      if (wanted.length) {
+        post({ type: "models", id: req.id, done: 0, total: wanted.length });
+        const fetched = await fetchModels(wanted, {
+          apiBase: `${self.location.origin}/api/models`,
+          concurrency: 6,
+          onProgress: (done, total) => post({ type: "models", id: req.id, done, total }),
+        });
+        for (const k of wanted) {
+          const m = fetched.get(k);
+          if (m) modelCache.set(k, m);
+          else missingModels.add(k);
+        }
+      }
+      models = new Map();
+      for (const k of modelKeys(board)) {
+        const m = modelCache.get(k);
+        if (m) models.set(k, m);
+      }
+    }
     const key = JSON.stringify(req.scene);
     if (!scene || key !== sceneKey) {
       const { maskColor, silkColor, copperFinish, components, pixelsPerMm } = req.scene;
       scene = buildScene(board, {
         components,
         pixelsPerMm,
+        ...(models ? { models } : {}),
         ...(maskColor ? { maskColor } : {}),
         ...(silkColor ? { silkColor } : {}),
         ...(copperFinish ? { copperFinish } : {}),
@@ -70,4 +99,4 @@ self.onmessage = (event: MessageEvent<RenderRequest>) => {
   } catch (error) {
     post({ type: "error", id: req.id, message: error instanceof Error ? error.message : String(error) });
   }
-};
+}

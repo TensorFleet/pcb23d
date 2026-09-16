@@ -1,7 +1,8 @@
 #!/usr/bin/env bun
 import { mkdir } from "node:fs/promises";
-import { basename, join } from "node:path";
-import { fetchRemoteBoard, isRemoteInput, parseBackground, renderPcb } from "pcb23d";
+import { homedir } from "node:os";
+import { basename, dirname, join } from "node:path";
+import { fetchRemoteBoard, isRemoteInput, parseBackground, renderPcb, type ModelFetchOptions } from "pcb23d";
 import { parseArgs, USAGE } from "./args";
 
 declare const PCB23D_VERSION: string | undefined;
@@ -56,6 +57,7 @@ async function main(argv: string[]): Promise<number> {
     const stem = fileName.replace(/\.(zip|kicad_pcb)$/i, "") || "board";
     try {
       const result = await renderPcb(bytes, {
+        fetchModels: opts.models ? modelFetchOptions(opts.modelsUrl, opts.quiet || opts.json) : false,
         views: opts.views,
         width: opts.width,
         height: opts.height,
@@ -78,7 +80,7 @@ async function main(argv: string[]): Promise<number> {
       if (!opts.quiet && !opts.json) {
         const b = result.board;
         console.error(
-          `${input}: ${b.widthMm}×${b.heightMm} mm, ${b.stats.footprints} footprints, ${b.components} bodies, ${b.stats.tracks} tracks, ${b.stats.vias} vias → ${Object.values(files).join(", ")} (${ms} ms)`,
+          `${input}: ${b.widthMm}×${b.heightMm} mm, ${b.stats.footprints} footprints, ${b.components} bodies (${b.modelsUsed} with 3D models), ${b.stats.tracks} tracks, ${b.stats.vias} vias → ${Object.values(files).join(", ")} (${ms} ms)`,
         );
       }
       summaries.push({ input, board: result.source.path, ...result.board, files, ms });
@@ -90,6 +92,45 @@ async function main(argv: string[]): Promise<number> {
   }
   if (opts.json) console.log(JSON.stringify(summaries.length === 1 ? summaries[0] : summaries, null, 2));
   return failures > 0 ? 1 : 0;
+}
+
+/** Model fetching with an on-disk cache of the converted meshes. */
+function modelFetchOptions(apiBase: string | undefined, quiet: boolean): ModelFetchOptions {
+  const cacheDir = process.env.PCB23D_CACHE_DIR ?? join(process.env.XDG_CACHE_HOME ?? join(homedir(), ".cache"), "pcb23d", "models");
+  const realFetch = globalThis.fetch;
+  const cachingFetch = (async (input: string | URL | Request, init?: RequestInit) => {
+    const url = String(input);
+    const isMesh = url.includes("/api/models/");
+    const isWrl = url.includes("kicad-packages3D");
+    if (!isMesh && !isWrl) return realFetch(input, init);
+    const key = decodeURIComponent(url.split(isMesh ? "/api/models/" : "/master/")[1] ?? "");
+    const file = join(cacheDir, isMesh ? `${key}.bin` : key);
+    const cached = Bun.file(file);
+    if (await cached.exists()) return new Response(await cached.arrayBuffer(), { status: 200 });
+    const res = await realFetch(input, init);
+    if (res.ok) {
+      const buf = await res.arrayBuffer();
+      await mkdir(dirname(file), { recursive: true });
+      await Bun.write(file, buf);
+      return new Response(buf, { status: 200, headers: res.headers });
+    }
+    return res;
+  }) as unknown as typeof fetch;
+  let lastLine = 0;
+  return {
+    fetch: cachingFetch,
+    ...(apiBase !== undefined ? { apiBase } : {}),
+    concurrency: 8,
+    onProgress: quiet
+      ? undefined
+      : (done, total) => {
+          const now = Date.now();
+          if (done === total || now - lastLine > 500) {
+            lastLine = now;
+            process.stderr.write(`\r  3D models ${done}/${total}${done === total ? "\n" : ""}`);
+          }
+        },
+  } as ModelFetchOptions;
 }
 
 process.exitCode = await main(process.argv.slice(2));

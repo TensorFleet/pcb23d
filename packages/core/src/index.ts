@@ -11,6 +11,8 @@ import { buildPalette, type Palette, type RGB, parseColor } from "./color";
 import { readBoardSource, type BoardSource } from "./input";
 import { parseBoard, type Board, type BoardStats, type Component, type Hole } from "./kicad/board";
 import { buildMesh, type Mesh } from "./mesh";
+import { fetchModels, type ModelFetchOptions } from "./models/refs";
+import type { ModelMesh } from "./models/vrml";
 import { encodePng } from "./png";
 import { renderMesh, resolveView, VIEWS, type RenderOptions, type RgbaImage, type ViewName, type ViewSpec } from "./render";
 import { buildFaceTexture, type Texture, type TextureOptions } from "./texture";
@@ -19,6 +21,11 @@ export { parseBoard, buildMesh, renderMesh, encodePng, buildFaceTexture, buildPa
 export { parseSExpr } from "./sexpr";
 export { pickBoardPath, isZip } from "./input";
 export { parseGithubUrl, fetchGithubBoard, fetchRemoteBoard, isRemoteInput } from "./github";
+export { parseVrml } from "./models/vrml";
+export { encodeMesh, decodeMesh } from "./models/mesh-format";
+export { modelKey, isValidModelKey, modelRawUrl, modelApiUrl, fetchModel, fetchModels, DEFAULT_MODEL_API, KICAD_PACKAGES3D_RAW } from "./models/refs";
+export type { ModelMesh, MeshGroup } from "./models/vrml";
+export type { ModelRef, ModelFetcher, ModelFetchOptions } from "./models/refs";
 export type { GithubRef, RemoteBoard, FetchOptions } from "./github";
 export { kicadKind, pickMainDocument } from "./kicad/files";
 export { estimateHeight } from "./kicad/heights";
@@ -31,8 +38,10 @@ export interface SceneOptions extends TextureOptions {
   silkColor?: string;
   /** Copper finish: gold/ENIG, silver/HASL, or bare copper. Defaults to the stackup, then gold. */
   copperFinish?: string;
-  /** Draw component bodies as boxes. Default true. */
+  /** Draw component bodies (models when available, boxes otherwise). Default true. */
   components?: boolean;
+  /** Converted 3D models keyed by library path (see `modelKeys`, `fetchModels`). */
+  models?: Map<string, ModelMesh>;
 }
 
 export interface Scene {
@@ -53,17 +62,34 @@ export function buildScene(board: Board, opts: SceneOptions = {}): Scene {
   });
   const top = buildFaceTexture(board, "front", palette, opts);
   const bottom = buildFaceTexture(board, "back", palette, opts);
-  const mesh = buildMesh(board, top, bottom, palette, { components: opts.components ?? true });
+  const mesh = buildMesh(board, top, bottom, palette, {
+    components: opts.components ?? true,
+    ...(opts.models ? { models: opts.models } : {}),
+  });
   return { board, palette, textures: { top, bottom }, mesh };
 }
 
+/** Library model keys a board needs, in first-seen order. */
+export function modelKeys(board: Board): string[] {
+  const keys = new Set<string>();
+  for (const c of board.components) for (const m of c.models) if (m.key && !m.hide) keys.add(m.key);
+  return [...keys];
+}
+
 export interface RenderPcbOptions extends SceneOptions, RenderOptions {
+  /**
+   * Fetch real 3D models for footprints (KiCad library WRL via the pcb23d mesh API). Default
+   * true for `renderPcb`; `renderPcbSync` never fetches. Pass options to control the source.
+   */
+  fetchModels?: boolean | ModelFetchOptions;
   /** Which views to render. Default: top, bottom, angle. */
   views?: (ViewName | ({ name: string } & ViewSpec))[];
   /** Skip PNG encoding and return raw RGBA only. */
   png?: boolean;
   /** File name hint for bare (non-zip) inputs. */
   fileName?: string;
+  /** @internal archive listing carried over when the board was already extracted. */
+  sourcePaths?: string[];
 }
 
 export interface RenderedView {
@@ -87,6 +113,8 @@ export interface RenderPcbResult {
     layers: string[];
     stats: BoardStats;
     components: number;
+    /** Components drawn from a real 3D model rather than a box. */
+    modelsUsed: number;
     outlineFromEdgeCuts: boolean;
   };
   images: Record<string, RenderedView>;
@@ -100,12 +128,18 @@ const DEFAULT_VIEWS: ViewName[] = ["top", "bottom", "angle"];
  * Synchronous work wrapped in a promise so browser callers can await it uniformly.
  */
 export async function renderPcb(input: Uint8Array | string, options: RenderPcbOptions = {}): Promise<RenderPcbResult> {
-  return renderPcbSync(input, options);
+  const want = options.fetchModels ?? true;
+  if (!want || options.models || options.components === false) return renderPcbSync(input, options);
+  const source = readBoardSource(input, options.fileName);
+  const board = parseBoard(source.text);
+  const models = await fetchModels(modelKeys(board), typeof want === "object" ? want : {});
+  return renderPcbSync(source.text, { ...options, models, fileName: source.path, sourcePaths: source.archivePaths });
 }
 
 export function renderPcbSync(input: Uint8Array | string, options: RenderPcbOptions = {}): RenderPcbResult {
   const t0 = now();
   const source = readBoardSource(input, options.fileName);
+  if (options.sourcePaths) source.archivePaths = options.sourcePaths;
   const board = parseBoard(source.text);
   const t1 = now();
   const scene = buildScene(board, options);
@@ -145,6 +179,7 @@ export function renderPcbSync(input: Uint8Array | string, options: RenderPcbOpti
       layers: board.copperLayers,
       stats: board.stats,
       components: board.components.length,
+      modelsUsed: options.models ? board.components.filter((c) => c.models.some((m) => m.key && options.models!.has(m.key))).length : 0,
       outlineFromEdgeCuts: board.outlineFromEdgeCuts,
     },
     images,

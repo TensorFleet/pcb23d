@@ -42,6 +42,17 @@ abutting shapes (fractured zone fills, chained tracks) do not leave seams.
 exposed finish through mask openings, silkscreen (clipped by openings), and alpha 0
 for holes and outside the outline. Default 16 px/mm, capped at 4096 px.
 
+## 3D models
+
+`models/refs.ts` maps a footprint's `(model "${KICAD9_3DMODEL_DIR}/X.3dshapes/Y.step")` to the
+library key `X.3dshapes/Y.wrl`. `models/vrml.ts` parses the library's VRML 2.0 files (Shape,
+Appearance/Material with DEF/USE, IndexedFaceSet, Transform/Group; 0.1 inch units → mm) into
+colour groups of triangles; `models/mesh-format.ts` is the little-endian binary the cache
+stores. `fetchModels` asks `/api/models/<key>` first (Worker: R2 `mesh/v1/<key>.bin`, else
+fetch the WRL from the GitHub mirror, convert, store) and falls back to parsing the WRL in the
+client. `mesh.ts` places a model with KiCad's order — scale, rotate X/Y/Z (negated), offset,
+footprint rotation, 180° about X for back-side parts — or draws the box when no model exists.
+
 ## Mesh and rendering
 
 The outline (with holes) is triangulated by earcut for the top and bottom faces; every
@@ -60,6 +71,6 @@ runs it in a Worker and streams each view as it finishes.
 ## Known gaps
 
 - Silkscreen and fab text is not drawn (needs a stroke font).
-- 3D models referenced by footprints are ignored; boxes stand in.
+- Project-local models (`${KIPRJMOD}/...`) are not fetched; boxes stand in.
 - Inner copper layers are parsed but not visible; only outer faces are textured.
 - Holes are see-through with no barrel walls.

@@ -1,7 +1,9 @@
 # Cloudflare deployment
 
-PCB23D is a static-assets Worker (`apps/web/dist`) with a 20-line script in front
-(`apps/web/src/worker.ts`) that only canonicalises hosts. No R2, KV, or cron.
+PCB23D is a static-assets Worker (`apps/web/dist`) with a small script in front
+(`apps/web/src/worker.ts`): host canonicalisation plus `/api/models/*`, which converts KiCad
+library WRL models to pcb23d's mesh format and caches them in the R2 bucket `pcb23d-models`
+(created 2026-09-16; shared by local, staging, and production). No KV or cron.
 
 | Config | Worker | Hosts |
 | --- | --- | --- |

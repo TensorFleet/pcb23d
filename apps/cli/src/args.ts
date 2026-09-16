@@ -12,6 +12,8 @@ export interface CliOptions {
   silkColor: string | undefined;
   copperFinish: string | undefined;
   components: boolean;
+  models: boolean;
+  modelsUrl: string | undefined;
   pixelsPerMm: number | undefined;
   json: boolean;
   quiet: boolean;
@@ -40,7 +42,11 @@ Options:
       --mask <color>       Soldermask colour: green, red, blue, black, white, purple, yellow, #hex
       --silk <color>       Silkscreen colour (default from the board, else white)
       --finish <name>      Copper finish: gold (ENIG), silver (HASL), copper
-      --no-components      Skip component body boxes
+      --no-components      Skip component bodies entirely
+      --no-models          Boxes only: do not fetch KiCad library 3D models
+      --models-url <base>  Mesh API base (default https://pcbto3d.com/api/models);
+                           falls back to raw.githubusercontent.com/KiCad/kicad-packages3D.
+                           Converted models are cached in ~/.cache/pcb23d/models
       --texture <ppmm>     Texture pixels per mm (default 16)
       --json               Print a JSON summary to stdout
   -q, --quiet              No progress output
@@ -62,6 +68,8 @@ export function parseArgs(argv: string[]): CliOptions {
     silkColor: undefined,
     copperFinish: undefined,
     components: true,
+    models: true,
+    modelsUrl: undefined,
     pixelsPerMm: undefined,
     json: false,
     quiet: false,
@@ -123,6 +131,12 @@ export function parseArgs(argv: string[]): CliOptions {
         break;
       case "--no-components":
         o.components = false;
+        break;
+      case "--no-models":
+        o.models = false;
+        break;
+      case "--models-url":
+        o.modelsUrl = value(key);
         break;
       case "--json":
         o.json = true;

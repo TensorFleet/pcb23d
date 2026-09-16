@@ -44,8 +44,10 @@ and the path of every PNG written. Exit code 0 on success, 1 if any input failed
     --width 1600 --height 1200 --supersample 2          # image size, anti-aliasing 1-4
     --bg "#ffffff"                                      # or transparent (default)
     --mask black --finish silver --silk white           # override board colours
-    --no-components                                     # bare board, no body boxes
+    --no-components                                     # bare board, no bodies
+    --no-models                                         # boxes instead of KiCad library 3D models (offline)
 
-Limits to tell the user about: footprint 3D models are not drawn (components are boxes sized
-from fab outlines); only the outer copper layers are visible. GitHub inputs use the anonymous
+Components use the KiCad library's 3D models (fetched from pcbto3d.com's mesh cache or GitHub,
+cached under ~/.cache/pcb23d). Footprints without a library model, or project-local models,
+are drawn as boxes sized from their fab outline. Only the outer copper layers are visible. GitHub inputs use the anonymous
 API (60 requests/hour) unless GITHUB_TOKEN is set.

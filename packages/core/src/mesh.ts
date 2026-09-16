@@ -7,7 +7,8 @@ import earcut from "earcut";
 import type { Palette, RGB } from "./color";
 import type { Ring, Vec2 } from "./geometry";
 import { ringArea } from "./geometry";
-import type { Board } from "./kicad/board";
+import type { Board, Component } from "./kicad/board";
+import type { ModelMesh } from "./models/vrml";
 import type { Texture } from "./texture";
 
 export type Material = { kind: "texture"; texture: Texture } | { kind: "color"; rgb: RGB };
@@ -74,6 +75,8 @@ class MeshBuilder {
 
 export interface MeshOptions {
   components?: boolean;
+  /** Converted 3D models keyed by library path; components without one fall back to boxes. */
+  models?: Map<string, ModelMesh>;
 }
 
 export function buildMesh(
@@ -132,7 +135,14 @@ export function buildMesh(
 
   if (opts.components ?? true) {
     const boardArea = bw * bh;
+    const materialCache = new Map<string, number>();
     for (const comp of board.components) {
+      const model = pickModel(comp, opts.models);
+      if (model) {
+        addModel(mb, comp, model.mesh, model.ref, comp.side === "front" ? zTop : zBot, toWorld, materialCache);
+        continue;
+      }
+      if (comp.boxless) continue;
       const area = Math.abs(ringArea(comp.outline));
       if (area > boardArea * 0.6) continue;
       const base = comp.side === "front" ? zTop : zBot;
@@ -142,6 +152,80 @@ export function buildMesh(
   }
 
   return mb.build();
+}
+
+function pickModel(comp: Component, models: Map<string, ModelMesh> | undefined): { mesh: ModelMesh; ref: Component["models"][number] } | null {
+  if (!models) return null;
+  for (const ref of comp.models) {
+    if (ref.hide || !ref.key) continue;
+    const mesh = models.get(ref.key);
+    if (mesh && mesh.triangles > 0) return { mesh, ref };
+  }
+  return null;
+}
+
+/**
+ * Place a library model: KiCad applies scale, then rotations about X, Y, Z (negated angles),
+ * then the offset, in a right-handed frame with X east, Y north, Z up. Then the footprint
+ * rotation about Z; back-side footprints are turned 180° about X so they hang under the board.
+ */
+function addModel(
+  mb: MeshBuilder,
+  comp: Component,
+  mesh: ModelMesh,
+  ref: Component["models"][number],
+  surfaceZ: number,
+  toWorld: (p: Vec2, z: number) => [number, number, number],
+  materialCache: Map<string, number>,
+): void {
+  const [sx, sy, sz] = ref.scale;
+  const rx = (-ref.rotate[0] * Math.PI) / 180;
+  const ry = (-ref.rotate[1] * Math.PI) / 180;
+  const rz = (-ref.rotate[2] * Math.PI) / 180;
+  const fpRot = (comp.rotation * Math.PI) / 180;
+  const back = comp.side === "back";
+  const origin = toWorld(comp.at, surfaceZ);
+  const cosX = Math.cos(rx), sinX = Math.sin(rx);
+  const cosY = Math.cos(ry), sinY = Math.sin(ry);
+  const cosZ = Math.cos(rz), sinZ = Math.sin(rz);
+  const cosF = Math.cos(fpRot), sinF = Math.sin(fpRot);
+  const place = (x: number, y: number, z: number): [number, number, number] => {
+    x *= sx;
+    y *= sy;
+    z *= sz;
+    // rotate X
+    let y1 = y * cosX - z * sinX;
+    let z1 = y * sinX + z * cosX;
+    // rotate Y
+    let x2 = x * cosY + z1 * sinY;
+    let z2 = -x * sinY + z1 * cosY;
+    // rotate Z
+    let x3 = x2 * cosZ - y1 * sinZ;
+    let y3 = x2 * sinZ + y1 * cosZ;
+    x3 += ref.offset[0];
+    y3 += ref.offset[1];
+    z2 += ref.offset[2];
+    if (back) {
+      y3 = -y3;
+      z2 = -z2;
+    }
+    const wx = x3 * cosF - y3 * sinF;
+    const wy = x3 * sinF + y3 * cosF;
+    return [origin[0] + wx, origin[1] + wy, origin[2] + z2];
+  };
+  for (const g of mesh.groups) {
+    if (g.transparency > 0.9) continue;
+    const key = `${g.color.map((c) => Math.round(c)).join(",")}`;
+    let mat = materialCache.get(key);
+    if (mat === undefined) {
+      mat = mb.material({ kind: "color", rgb: [g.color[0], g.color[1], g.color[2]] });
+      materialCache.set(key, mat);
+    }
+    const p = g.positions;
+    for (let i = 0; i + 8 < p.length; i += 9) {
+      mb.tri(place(p[i]!, p[i + 1]!, p[i + 2]!), place(p[i + 3]!, p[i + 4]!, p[i + 5]!), place(p[i + 6]!, p[i + 7]!, p[i + 8]!), mat);
+    }
+  }
 }
 
 function addBox(

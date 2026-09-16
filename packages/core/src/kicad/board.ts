@@ -30,6 +30,7 @@ import {
 import { atoms, child, children, flag, head, isList, num, numbers, parseSExpr, str, type SExpr } from "../sexpr";
 import { estimateHeight, isBodilessFootprint } from "./heights";
 import { defaultThickness, textStrokes, type HAlign, type TextStyle, type VAlign } from "../font/text";
+import { modelKey, type ModelRef } from "../models/refs";
 
 export type Side = "front" | "back";
 
@@ -57,6 +58,10 @@ export interface Component {
   height: number;
   /** World-space body outline (4 corners). */
   outline: Ring;
+  /** 3D model references from the footprint, in file order. */
+  models: ModelRef[];
+  /** True when no body box should be drawn if the model is unavailable (test points, holes). */
+  boxless?: boolean;
 }
 
 export interface Stackup {
@@ -402,19 +407,24 @@ class ParseContext {
       }
     }
 
-    if (isBodilessFootprint(name) && !boundsValid(fabBounds)) return;
-    if (!hasBodyPad && !boundsValid(fabBounds)) return;
     if (attrs.includes("dnp")) return;
+    const models = parseModels(item);
+    const hasModel = models.some((m) => m.key && !m.hide);
+    const bodiless = (isBodilessFootprint(name) && !boundsValid(fabBounds)) || (!hasBodyPad && !boundsValid(fabBounds));
+    if (bodiless && !hasModel) return;
 
     let body: Bounds | undefined;
     if (boundsValid(fabBounds)) body = fabBounds;
     else if (boundsValid(crtBounds)) body = shrink(crtBounds, 0.25);
     else if (boundsValid(padBounds)) body = padBounds;
-    if (!body || !boundsValid(body)) return;
+    if (!body || !boundsValid(body)) {
+      if (!hasModel) return;
+      body = { minX: -0.5, minY: -0.5, maxX: 0.5, maxY: 0.5 };
+    }
 
     const bodyWidth = body.maxX - body.minX;
     const bodyHeight = body.maxY - body.minY;
-    if (bodyWidth < 0.3 || bodyHeight < 0.3) return;
+    if ((bodyWidth < 0.3 || bodyHeight < 0.3) && !hasModel) return;
     const height = estimateHeight(name, bodyWidth, bodyHeight);
     const outline = [
       { x: body.minX, y: body.minY },
@@ -433,6 +443,9 @@ class ParseContext {
       bodyHeight,
       height,
       outline,
+      models,
+      // a box only makes sense when the footprint has a real body footprint
+      ...(bodiless ? { boxless: true } : {}),
     });
   }
 
@@ -870,6 +883,31 @@ export function footprintTransform(item: SExpr[]): Transform {
     return { at: { x: tr[0] ?? 0, y: tr[1] ?? 0 }, rot };
   }
   return { at: { x: 0, y: 0 }, rot: 0 };
+}
+
+/** `(model "path" (hide yes)? (offset (xyz ..)) (scale (xyz ..)) (rotate (xyz ..)))` entries. */
+export function parseModels(footprint: SExpr[]): ModelRef[] {
+  const out: ModelRef[] = [];
+  for (const m of children(footprint, "model")) {
+    const path = typeof m[1] === "string" ? m[1] : "";
+    if (!path) continue;
+    const xyz = (name: string, fallback: [number, number, number]): [number, number, number] => {
+      const n = numbers(child(child(m, name), "xyz"));
+      return n.length >= 3 ? [n[0]!, n[1]!, n[2]!] : fallback;
+    };
+    // legacy (KiCad 5) wrote (at (xyz ...)) in inches
+    const legacyAt = numbers(child(child(m, "at"), "xyz"));
+    const offset = legacyAt.length >= 3 ? ([legacyAt[0]! * 25.4, legacyAt[1]! * 25.4, legacyAt[2]! * 25.4] as [number, number, number]) : xyz("offset", [0, 0, 0]);
+    out.push({
+      path,
+      key: modelKey(path),
+      offset,
+      scale: xyz("scale", [1, 1, 1]),
+      rotate: xyz("rotate", [0, 0, 0]),
+      hide: flag(m, "hide"),
+    });
+  }
+  return out;
 }
 
 function isHidden(item: SExpr[]): boolean {

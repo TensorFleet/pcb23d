@@ -13,6 +13,8 @@
     { "pattern": "www.pcb23d.com", "custom_domain": true }
   ],
   "vars": { "PRIMARY_HOST": "pcbto3d.com" },
+  "alias": { "pcb23d": "../../packages/core/src/index.ts" },
+  "r2_buckets": [{ "binding": "MODELS", "bucket_name": "pcb23d-models" }],
   "assets": {
     "directory": "./dist",
     "binding": "ASSETS",
