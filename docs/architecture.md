@@ -59,17 +59,18 @@ WRL falls back to the library's copy, and a library part missing upstream falls 
 same-named file in the project. `models/occt.ts` adapts occt-import-js (OpenCascade WASM)
 output for STEP-only files; hosts supply it through `ModelFetchOptions.convertStep`.
 
-## Edge renders of GitHub boards
+## Edge renders of forge boards
 
 `apps/web/src/edge/img.ts` runs the same pipeline on the Cloudflare Worker for
-`/img/gh/{owner}/{repo}[/@ref].jpg`. The board comes from pcbFiddle's snapshot API
+`/img/{gh|cb|gl}/{owner}/{repo}[/@ref].jpg`. The board comes from pcbFiddle's snapshot API
 (`edge/gh.ts`: manifest, then the `.kicad_pcb` bytes pcbFiddle already holds in R2), models
 come from `loadModelMesh` — the R2 half of `/api/models` called in-process, one bucket read
 per part, with a 40 MiB budget after which parts draw as boxes — and the 1200×630 card is
 encoded as JPEG (`jpeg-js`) or PNG. The image is stored in pcbFiddle's bucket next to the
-snapshot (`gh/{owner}/{repo}/{sha}/renders/angle-1200x630-v1.jpg`) and in the edge cache;
-`@<sha>` URLs are immutable, ref URLs re-resolve every few minutes. `/img/gh/{owner}/{repo}`
-is the static `/img/` page with its slots and og tags filled by `HTMLRewriter`.
+snapshot (`{gh|cb|gl}/{owner}/{repo}/{sha}/renders/angle-1200x630-v1.jpg`) and in the edge
+cache; `@<sha>` URLs are immutable, ref URLs re-resolve every few minutes.
+`/img/{gh|cb|gl}/{owner}/{repo}` is the static `/img/` page with its slots and og tags
+filled by `HTMLRewriter`.
 
 ## Mesh and rendering
 
