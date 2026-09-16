@@ -39,6 +39,11 @@ describe("EasyEDA models", () => {
     expect(info?.title).toBe("USB-C-SMD_TYPE-C-USB-18");
     expect(info?.rotate).toEqual([0, 0, 180]);
     expect(info?.offset[2]).toBeCloseTo(-1.0, 2); // z -3.937 canvas units × 0.254 mm
+    // this part's c_origin is bogus (hundreds of mm away); the SVG outline centre wins
+    const sot = parseEasyedaComponent(await fixture("easyeda-C8545.json").json(), "C8545");
+    expect(sot?.title).toContain("SOT-23");
+    expect(Math.abs(sot!.offset[0])).toBeLessThan(2);
+    expect(Math.abs(sot!.offset[1])).toBeLessThan(2);
   });
   test("parses OBJ with inline materials, fan-triangulates, centres XY and puts the base at z=0", () => {
     const mesh = parseEasyedaObj(OBJ)!;

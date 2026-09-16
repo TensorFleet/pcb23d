@@ -47,9 +47,9 @@ export function parseEasyedaComponent(json: unknown, lcsc: string): EasyedaModel
     if (!shape.startsWith("SVGNODE")) continue;
     const jsonStart = shape.indexOf("{");
     if (jsonStart < 0) continue;
-    let node: { attrs?: Record<string, string> };
+    let node: { attrs?: Record<string, string>; childNodes?: { attrs?: Record<string, string> }[] };
     try {
-      node = JSON.parse(shape.slice(jsonStart)) as { attrs?: Record<string, string> };
+      node = JSON.parse(shape.slice(jsonStart)) as typeof node;
     } catch {
       continue;
     }
@@ -58,9 +58,25 @@ export function parseEasyedaComponent(json: unknown, lcsc: string): EasyedaModel
     if (!uuid || !/^[0-9a-f]{16,64}$/i.test(uuid)) continue;
     const [ox = "0", oy = "0"] = (attrs.c_origin ?? "0,0").split(",");
     const [rx = "0", ry = "0", rz = "0"] = (attrs.c_rotation ?? "0,0,0").split(",");
-    const tx = (Number(ox) - canvasX) * EASYEDA_CANVAS_MM;
-    const ty = -(Number(oy) - canvasY) * EASYEDA_CANVAS_MM;
+    let tx = (Number(ox) - canvasX) * EASYEDA_CANVAS_MM;
+    let ty = -(Number(oy) - canvasY) * EASYEDA_CANVAS_MM;
     const tz = Number(attrs.z ?? 0) * EASYEDA_CANVAS_MM;
+    // c_origin is unreliable on many parts; the model outline drawn in the SVG node is where
+    // EasyEDA actually shows the model, so prefer its centre when the two disagree (easyeda2kicad
+    // does the same with a 0.1 mm threshold).
+    const outline = svgOutlineCentre(node.childNodes ?? []);
+    if (outline) {
+      const cx = (outline[0] - canvasX) * EASYEDA_CANVAS_MM;
+      const cy = -(outline[1] - canvasY) * EASYEDA_CANVAS_MM;
+      if (Math.abs(cx - tx) > 0.1 || Math.abs(cy - ty) > 0.1) {
+        tx = cx;
+        ty = cy;
+      }
+    }
+    if (Math.abs(tx) > 100 || Math.abs(ty) > 100) {
+      tx = 0;
+      ty = 0;
+    }
     return {
       lcsc,
       uuid,
@@ -70,6 +86,22 @@ export function parseEasyedaComponent(json: unknown, lcsc: string): EasyedaModel
     };
   }
   return null;
+}
+
+function svgOutlineCentre(children: { attrs?: Record<string, string> }[]): [number, number] | null {
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  for (const child of children) {
+    const pts = (child.attrs?.points ?? "").trim().split(/\s+/).map(Number);
+    for (let i = 0; i + 1 < pts.length; i += 2) {
+      const x = pts[i]!, y = pts[i + 1]!;
+      if (!Number.isFinite(x) || !Number.isFinite(y)) continue;
+      if (x < minX) minX = x;
+      if (y < minY) minY = y;
+      if (x > maxX) maxX = x;
+      if (y > maxY) maxY = y;
+    }
+  }
+  return Number.isFinite(minX) && maxX > minX ? [(minX + maxX) / 2, (minY + maxY) / 2] : null;
 }
 
 function round(v: number): number {

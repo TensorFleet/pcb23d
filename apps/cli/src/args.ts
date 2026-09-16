@@ -17,6 +17,7 @@ export interface CliOptions {
   step: boolean;
   occtUrl: string;
   lcsc: boolean;
+  lcscUrl: string | undefined;
   pixelsPerMm: number | undefined;
   json: boolean;
   quiet: boolean;
@@ -51,6 +52,7 @@ Options:
                            falls back to raw.githubusercontent.com/KiCad/kicad-packages3D.
                            Converted models are cached in ~/.cache/pcb23d/models
       --no-lcsc            Do not look up EasyEDA models for footprints tagged with an LCSC part
+      --lcsc-url <base>    LCSC model API base (default https://pcbto3d.com/api/lcsc)
       --no-step            Do not tessellate STEP models (project parts without a WRL).
                            STEP support downloads OpenCascade WASM (7 MB) once into
                            ~/.cache/pcb23d/occt
@@ -81,6 +83,7 @@ export function parseArgs(argv: string[]): CliOptions {
     step: true,
     occtUrl: "https://pcbto3d.com/occt",
     lcsc: true,
+    lcscUrl: undefined,
     pixelsPerMm: undefined,
     json: false,
     quiet: false,
@@ -154,6 +157,9 @@ export function parseArgs(argv: string[]): CliOptions {
         break;
       case "--no-lcsc":
         o.lcsc = false;
+        break;
+      case "--lcsc-url":
+        o.lcscUrl = value(key);
         break;
       case "--occt-url":
         o.occtUrl = value(key);

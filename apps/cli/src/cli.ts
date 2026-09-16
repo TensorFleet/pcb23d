@@ -67,7 +67,7 @@ async function main(argv: string[]): Promise<number> {
               ...modelFetchOptions(opts.modelsUrl, opts.quiet || opts.json),
               ...(project ? { project } : {}),
               ...(opts.step ? { convertStep: lazyStepConverter(opts.occtUrl, opts.quiet || opts.json) } : {}),
-              ...(opts.lcsc ? {} : { lcscApiBase: "" }),
+              ...(opts.lcsc ? (opts.lcscUrl ? { lcscApiBase: opts.lcscUrl } : {}) : { lcscApiBase: "" }),
             }
           : false,
         views: opts.views,

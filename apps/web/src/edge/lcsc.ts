@@ -7,7 +7,7 @@ import { easyedaComponentUrl, easyedaModelUrl, encodeMesh, parseEasyedaComponent
 import { CORS } from "./models";
 import { edgeCache, type Env, type ExecutionContextLike } from "./env";
 
-const LCSC_VERSION = "v1";
+const LCSC_VERSION = "v2";
 const UA = { "User-Agent": "pcb23d-model-cache (+https://pcbto3d.com)" };
 
 export async function handleLcsc(request: Request, env: Env, ctx: ExecutionContextLike, url: URL): Promise<Response> {
