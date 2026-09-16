@@ -210,6 +210,7 @@ pcb23d hat.kicad_pcb --views hero=45/30 --bg #ffffff</code></pre>
   let board: BoardSummary | null = null;
   const images = new Map<string, { blob: Blob; url: string; width: number; height: number; ms: number }>();
   let active = "angle";
+  let preferred = "angle";
 
   function getWorker(): Worker {
     if (worker) return worker;
@@ -277,9 +278,9 @@ pcb23d hat.kicad_pcb --views hero=45/30 --bg #ffffff</code></pre>
       const prev = images.get(msg.name);
       if (prev) URL.revokeObjectURL(prev.url);
       images.set(msg.name, { blob, url: URL.createObjectURL(blob), width: msg.width, height: msg.height, ms: msg.ms });
-      renderTabs();
-      if (!images.has(active)) active = msg.name;
-      if (msg.name === active || images.size === 1) show(msg.name);
+      // show the first view that arrives, then switch to the preferred one when it lands
+      if (msg.name === preferred || !images.has(active)) show(msg.name);
+      else renderTabs();
       const order = ["top", "bottom", "angle", "angle-bottom"];
       const next = order.find((n) => !images.has(n));
       progressText.textContent = next ? `Rendering ${LABELS[next] ?? next}…` : "Finishing…";
@@ -327,6 +328,7 @@ pcb23d hat.kicad_pcb --views hero=45/30 --bg #ffffff</code></pre>
     images.clear();
     board = null;
     active = "angle";
+    preferred = "angle";
     result.hidden = false;
     resultTitle.textContent = name;
     resultMeta.textContent = "";
@@ -400,7 +402,7 @@ pcb23d hat.kicad_pcb --views hero=45/30 --bg #ffffff</code></pre>
   }
   renderCustom.addEventListener("click", () => {
     if (!board) return;
-    active = "custom";
+    preferred = "custom";
     send([customView()]);
   });
 
@@ -578,6 +580,7 @@ pcb23d hat.kicad_pcb --views hero=45/30 --bg #ffffff</code></pre>
     max-width: 1200px;
     margin: 0 auto;
     padding: 16px 32px 72px;
+    scroll-margin-top: 84px;
   }
   .result-head {
     display: flex;
@@ -649,6 +652,9 @@ pcb23d hat.kicad_pcb --views hero=45/30 --bg #ffffff</code></pre>
     display: block;
   }
   .canvas-wrap img:not([src]) {
+    display: none;
+  }
+  .progress[hidden] {
     display: none;
   }
   .progress {
