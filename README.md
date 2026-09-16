@@ -1,0 +1,129 @@
+# PCB23D
+
+Turn a KiCad board into 3D renders. Drop a project zip or a `.kicad_pcb` on
+[pcb23d.com](https://pcb23d.com) and get top, bottom, and angled PNGs. The same
+renderer ships as the `pcb23d` npm library and as a single-binary CLI.
+
+Everything is pure TypeScript: an S-expression parser, a 2D layer compositor,
+and a software z-buffer rasterizer. No WebGL, no KiCad install, no server.
+The web app renders in a Web Worker and never uploads your files.
+
+| Path | What |
+| --- | --- |
+| `packages/core` | `pcb23d` library: parse `.kicad_pcb`, build textures + mesh, render views, encode PNG |
+| `apps/cli` | `pcb23d` command line, compiled with `bun build --compile` for 5 platforms |
+| `apps/web` | Astro static site (drag & drop UI), deployed as Cloudflare static assets |
+
+## Quick start
+
+Requirements: Bun 1.4.x.
+
+```bash
+bun install
+bun test
+bun run typecheck
+bun run dev                          # web app at http://localhost:4321
+bun run render board.zip --out out   # CLI from source
+bun run build:cli                    # apps/cli/dist/pcb23d for this machine
+bun run build:cli:all                # linux/darwin/windows binaries
+```
+
+## CLI
+
+```bash
+pcb23d board.zip                              # top, bottom, angle → ./pcb23d-out/
+pcb23d hat.kicad_pcb --views all --mask black # every preset, black mask
+pcb23d *.kicad_pcb -o renders --json          # batch, machine-readable summary
+pcb23d hat.kicad_pcb --views hero=45/30/persp --bg "#ffffff" -w 2400 -h 1800
+```
+
+Presets: `top`, `bottom`, `angle`, `angle-bottom`, `front`, `side`. Custom views
+are `name=azimuth/elevation[/persp|ortho]`. Colours accept names
+(`green`, `black`, `blue`, `red`, `white`, `purple`, `yellow`) or `#rrggbb`. See
+`pcb23d --help` for the rest.
+
+Binaries for Linux (x64, arm64), macOS (x64, arm64), and Windows (x64) are on
+[GitHub Releases](https://github.com/TensorFleet/pcb23d/releases). They are built
+by `.github/workflows/release.yml` when a `v*` tag is pushed.
+
+## Library
+
+```bash
+bun add pcb23d     # or npm i pcb23d
+```
+
+```ts
+import { renderPcb } from "pcb23d";
+
+const bytes = await Bun.file("board.zip").bytes(); // zip, .kicad_pcb bytes, or board text
+const result = await renderPcb(bytes, {
+  views: ["top", "bottom", "angle", { name: "hero", azimuth: 45, elevation: 30, projection: "perspective" }],
+  width: 1600,
+  height: 1200,
+  maskColor: "black",      // default: the board's stackup colour, then green
+  copperFinish: "gold",    // gold | silver | copper
+  background: "transparent",
+});
+
+await Bun.write("top.png", result.images.top!.png);
+console.log(result.board.stats, result.timings);
+```
+
+Lower-level pieces are exported too when you want to render many views from one
+scene or draw into your own canvas:
+
+```ts
+import { parseBoard, buildScene, renderMesh, encodePng, VIEWS } from "pcb23d";
+
+const board = parseBoard(text);
+const scene = buildScene(board, { maskColor: "blue" });
+const rgba = renderMesh(scene.mesh, { ...VIEWS.angle, azimuth: 20 }, { width: 800, height: 600 });
+ctx.putImageData(new ImageData(rgba.data, rgba.width, rgba.height), 0, 0); // browser
+const png = encodePng(rgba);
+```
+
+The library depends only on `fflate` (zip + deflate) and `earcut` (triangulation)
+and runs in Bun, Node 18+, Deno, Cloudflare Workers, and browsers (use a Worker;
+a 1600×1200 view takes a few hundred milliseconds).
+
+## What gets rendered
+
+- Board outline from `Edge.Cuts` (lines, arcs, circles, rects, polys; chained with
+  0.01 mm tolerance), with cut-outs as holes. Falls back to the content bounds.
+- Copper: tracks, arcs, vias, pads (rect, circle, oval, roundrect, chamfered,
+  trapezoid, custom primitives), and zone fills. Copper under the mask shows as a
+  lighter mask tint; mask openings show the finish colour.
+- Soldermask openings including expansion, via tenting (board default and
+  per-via overrides), silkscreen graphics, and drill holes (round and slots).
+- Components as boxes from the `F.Fab`/`B.Fab` outline (or courtyard, or pads),
+  with heights from IPC-7351 names (`RESC1005X40N` → 0.40 mm) or package
+  families. Mounting holes, test points, and fiducials are skipped.
+- Stackup colours: `(color "Green")` on `F.Mask`/`F.SilkS` and `copper_finish`
+  set the defaults.
+
+Not rendered yet: silkscreen text, STEP/VRML models, inner layers, board edge
+plating. See [docs/architecture.md](docs/architecture.md).
+
+## Web app
+
+`apps/web` is a static Astro site. Rendering happens in `src/lib/render.worker.ts`
+using the core package directly. Deploy as Cloudflare static assets:
+
+```bash
+bun run --cwd apps/web cf:dev             # local wrangler
+bun run --cwd apps/web deploy:staging     # pcb23d-staging.workers.dev
+bun run --cwd apps/web deploy:production  # pcb23d.com custom domain
+```
+
+## CI
+
+- `ci.yml`: typecheck, tests, library build, web build, CLI compile, and a smoke
+  run of the compiled binary on every push and PR. Cross-compiled binaries and
+  the web `dist/` are uploaded as artifacts.
+- `release.yml`: on `v*` tags, builds all binaries with checksums and creates a
+  GitHub release. Set the repository variable `PUBLISH_NPM=true` and the
+  `NPM_TOKEN` secret to also publish the library to npm.
+
+## License
+
+MIT

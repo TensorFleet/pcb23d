@@ -1,0 +1,217 @@
+---
+interface Props {
+  title: string;
+  description: string;
+}
+const { title, description } = Astro.props;
+---
+
+<!doctype html>
+<html lang="en" data-theme="dark">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width" />
+    <meta name="description" content={description} />
+    <meta name="generator" content={Astro.generator} />
+    <link rel="canonical" href={Astro.url} />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta property="og:title" content={title} />
+    <meta property="og:description" content={description} />
+    <title>{title}</title>
+    <script is:inline>
+      if (localStorage.getItem("pcb23d-theme") === "light") {
+        document.documentElement.dataset.theme = "light";
+      }
+    </script>
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="logo" href="/" aria-label="PCB23D home">pcb<span class="logo-accent">2</span>3D</a>
+      <nav class="site-nav">
+        <a href="#how">How it works</a>
+        <a href="#library">Library &amp; CLI</a>
+        <a href="https://github.com/TensorFleet/pcb23d">GitHub</a>
+      </nav>
+    </header>
+    <slot />
+    <footer>
+      <div>
+        <b>pcb<span class="logo-accent">2</span>3D</b>
+        <p>KiCad boards to 3D renders, entirely in your browser. Nothing is uploaded.</p>
+      </div>
+      <div class="footer-links">
+        <a href="https://github.com/TensorFleet/pcb23d">Source</a>
+        <a href="https://www.npmjs.com/package/pcb23d">npm</a>
+        <a href="https://github.com/TensorFleet/pcb23d/releases">CLI downloads</a>
+      </div>
+      <div class="footer-meta">
+        <span>© {new Date().getUTCFullYear()} fabPlane · MIT</span>
+        <button id="theme-toggle" type="button" aria-label="Switch to light theme">Light theme</button>
+      </div>
+    </footer>
+  </body>
+</html>
+<script>
+  const themeToggle = document.querySelector<HTMLButtonElement>("#theme-toggle");
+  const sync = () => {
+    const isLight = document.documentElement.dataset.theme === "light";
+    themeToggle?.setAttribute("aria-label", isLight ? "Switch to dark theme" : "Switch to light theme");
+    if (themeToggle) themeToggle.textContent = isLight ? "Dark theme" : "Light theme";
+  };
+  sync();
+  themeToggle?.addEventListener("click", () => {
+    const next = document.documentElement.dataset.theme === "light" ? "dark" : "light";
+    document.documentElement.dataset.theme = next;
+    localStorage.setItem("pcb23d-theme", next);
+    sync();
+  });
+</script>
+<style is:global>
+  :root {
+    color-scheme: dark;
+    --paper: #10130f;
+    --paper-2: #151a14;
+    --paper-3: #1a2119;
+    --ink: #edf0e9;
+    --green: #8dbd68;
+    --acid: #b9f45d;
+    --line: #30362e;
+    --line-2: #3b4638;
+    --muted: #a5aea0;
+    --danger: #ff8d89;
+  }
+  :root[data-theme="light"] {
+    color-scheme: light;
+    --paper: #f1f0e9;
+    --paper-2: #e8e8df;
+    --paper-3: #dfe0d5;
+    --ink: #1d211c;
+    --green: #4d7d32;
+    --acid: #4d7d32;
+    --line: #cccdc5;
+    --line-2: #b9bbb0;
+    --muted: #70746d;
+    --danger: #b33a36;
+  }
+  * {
+    box-sizing: border-box;
+  }
+  html {
+    scroll-behavior: smooth;
+    background: var(--paper);
+    color: var(--ink);
+    font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  }
+  body {
+    margin: 0;
+    background: var(--paper);
+  }
+  a {
+    color: inherit;
+    text-decoration: none;
+  }
+  code,
+  pre {
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  }
+  .site-header {
+    height: 68px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 0 max(24px, calc((100vw - 1200px) / 2));
+    border-bottom: 1px solid var(--line);
+    background: color-mix(in srgb, var(--paper) 92%, transparent);
+    backdrop-filter: blur(14px);
+    position: sticky;
+    top: 0;
+    z-index: 20;
+  }
+  .logo {
+    font-size: 17px;
+    font-weight: 800;
+    letter-spacing: -0.03em;
+  }
+  .logo-accent {
+    color: var(--acid);
+  }
+  .site-nav {
+    display: flex;
+    gap: 22px;
+    font-size: 13px;
+    color: var(--muted);
+  }
+  .site-nav a:hover {
+    color: var(--ink);
+  }
+  main {
+    min-height: calc(100vh - 190px);
+  }
+  footer {
+    border-top: 1px solid var(--line);
+    padding: 42px max(24px, calc((100vw - 1200px) / 2));
+    display: grid;
+    grid-template-columns: 1fr auto auto;
+    align-items: center;
+    gap: 48px;
+    color: var(--muted);
+    font-size: 13px;
+  }
+  footer p {
+    margin: 0.5rem 0;
+  }
+  .footer-links {
+    display: flex;
+    gap: 22px;
+  }
+  .footer-links a:hover {
+    color: var(--green);
+  }
+  .footer-meta {
+    display: flex;
+    gap: 24px;
+    align-items: center;
+  }
+  #theme-toggle {
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    padding: 7px 10px;
+    background: transparent;
+    color: var(--ink);
+    cursor: pointer;
+    font: 10px ui-monospace, monospace;
+  }
+  .kicker {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.16em;
+    font: 700 10px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace;
+  }
+  .kicker span {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--acid);
+    box-shadow: 0 0 0 4px color-mix(in srgb, var(--acid) 30%, transparent);
+  }
+  @media (max-width: 640px) {
+    .site-header {
+      padding: 0 14px;
+    }
+    .site-nav {
+      gap: 14px;
+    }
+    footer {
+      display: block;
+    }
+    .footer-links,
+    .footer-meta {
+      margin-top: 20px;
+      flex-wrap: wrap;
+    }
+  }
+</style>

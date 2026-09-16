@@ -1,0 +1,15 @@
+{
+  "$schema": "../../node_modules/wrangler/config-schema.json",
+  "name": "pcb23d",
+  "compatibility_date": "2026-09-14",
+  "workers_dev": true,
+  "routes": [
+    { "pattern": "pcb23d.com", "custom_domain": true },
+    { "pattern": "www.pcb23d.com", "custom_domain": true }
+  ],
+  "assets": {
+    "directory": "./dist",
+    "html_handling": "auto-trailing-slash",
+    "not_found_handling": "404-page"
+  }
+}

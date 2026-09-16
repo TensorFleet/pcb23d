@@ -1,0 +1,30 @@
+{
+  "name": "pcb23d-monorepo",
+  "version": "0.1.0",
+  "private": true,
+  "packageManager": "bun@1.4.0",
+  "engines": {
+    "bun": "1.4.x"
+  },
+  "workspaces": ["packages/*", "apps/*"],
+  "scripts": {
+    "dev": "bun run --cwd apps/web dev",
+    "build": "bun run --cwd packages/core build && bun run --cwd apps/web build",
+    "build:lib": "bun run --cwd packages/core build",
+    "build:cli": "bun run --cwd apps/cli build",
+    "build:cli:all": "bun run --cwd apps/cli build:all",
+    "typecheck": "bun run --cwd packages/core typecheck && bun run --cwd apps/cli typecheck && bun run --cwd apps/web typecheck",
+    "test": "bun test",
+    "check": "bun run typecheck && bun test && bun run build && bun run build:cli",
+    "format": "bunx prettier --write .",
+    "format:check": "bunx prettier --check .",
+    "render": "bun run --cwd apps/cli start --"
+  },
+  "devDependencies": {
+    "@types/bun": "1.2.21",
+    "@types/earcut": "3.0.0",
+    "prettier": "3.6.2",
+    "prettier-plugin-astro": "0.14.1",
+    "typescript": "5.9.2"
+  }
+}

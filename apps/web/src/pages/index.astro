@@ -1,0 +1,838 @@
+---
+import Base from "../layouts/Base.astro";
+---
+
+<Base
+  title="PCB23D — KiCad board to 3D render, in your browser"
+  description="Drop a KiCad project zip or .kicad_pcb and get 3D PNG renders: top, bottom, and angled. Runs locally in the browser; also an npm library and a single-binary CLI."
+>
+  <main>
+    <section class="hero" id="top">
+      <div class="hero-copy">
+        <p class="kicker"><span></span> KiCad → 3D, no upload</p>
+        <h1>Drop a board.<br /><em>Get the render.</em></h1>
+        <p class="hero-lede">
+          A KiCad project zip or a bare <code>.kicad_pcb</code> becomes top, bottom, and angled 3D
+          PNGs. Everything runs in this tab.
+        </p>
+      </div>
+
+      <div class="drop" id="drop-zone" tabindex="0" role="button" aria-label="Drop a KiCad zip or board file">
+        <div class="drop-board" aria-hidden="true">
+          <i></i><i></i><i></i><i></i>
+          <span>USB</span>
+          <b>MCU</b>
+          <em>○</em>
+        </div>
+        <div class="drop-copy">
+          <strong>Drop a <code>.zip</code> or <code>.kicad_pcb</code> here</strong>
+          <p>Zips are searched for the project's board. Files stay in your browser.</p>
+          <div class="drop-actions">
+            <button type="button" id="pick-file" class="btn-primary">Choose file…</button>
+            <button type="button" id="try-example" class="btn-ghost">Try an example board</button>
+          </div>
+          <input id="file-input" type="file" hidden accept=".zip,.kicad_pcb,application/zip" />
+        </div>
+      </div>
+      <p class="form-error" id="error" hidden></p>
+    </section>
+
+    <section class="result" id="result" hidden>
+      <div class="result-head">
+        <div>
+          <p class="kicker"><span></span> Render</p>
+          <h2 id="result-title">Board</h2>
+          <p class="result-meta" id="result-meta"></p>
+        </div>
+        <div class="result-actions">
+          <button type="button" id="download-all" class="btn-primary" disabled>Download all (.zip)</button>
+          <button type="button" id="reset" class="btn-ghost">New board</button>
+        </div>
+      </div>
+
+      <div class="result-body">
+        <div class="stage">
+          <div class="tabs" id="tabs" role="tablist"></div>
+          <div class="canvas-wrap" id="canvas-wrap">
+            <img id="preview" alt="3D render of the board" />
+            <div class="progress" id="progress"><span></span><em id="progress-text">Parsing board…</em></div>
+          </div>
+          <div class="stage-foot">
+            <span id="preview-info"></span>
+            <a id="download-one" class="btn-ghost" download>Download PNG</a>
+          </div>
+        </div>
+
+        <aside class="controls">
+          <h3>Options</h3>
+          <label>
+            <span>Soldermask</span>
+            <select id="opt-mask">
+              <option value="">From board</option>
+              <option value="green">Green</option>
+              <option value="black">Black</option>
+              <option value="blue">Blue</option>
+              <option value="red">Red</option>
+              <option value="white">White</option>
+              <option value="purple">Purple</option>
+              <option value="yellow">Yellow</option>
+            </select>
+          </label>
+          <label>
+            <span>Copper finish</span>
+            <select id="opt-finish">
+              <option value="">From board</option>
+              <option value="gold">Gold (ENIG)</option>
+              <option value="silver">Silver (HASL)</option>
+              <option value="copper">Bare copper</option>
+            </select>
+          </label>
+          <label>
+            <span>Image size</span>
+            <select id="opt-size">
+              <option value="1200x900">1200 × 900</option>
+              <option value="1600x1200" selected>1600 × 1200</option>
+              <option value="2400x1800">2400 × 1800</option>
+            </select>
+          </label>
+          <label class="check">
+            <input type="checkbox" id="opt-components" checked />
+            <span>Component bodies</span>
+          </label>
+
+          <h3>Custom angle</h3>
+          <label class="range">
+            <span>Azimuth <output id="az-out">-32°</output></span>
+            <input type="range" id="opt-az" min="-180" max="180" value="-32" />
+          </label>
+          <label class="range">
+            <span>Elevation <output id="el-out">38°</output></span>
+            <input type="range" id="opt-el" min="-89" max="89" value="38" />
+          </label>
+          <button type="button" id="render-custom" class="btn-ghost">Render custom view</button>
+          <p class="hint">Views: top and bottom are orthographic; angled views use a 28° lens.</p>
+        </aside>
+      </div>
+    </section>
+
+    <section class="how" id="how">
+      <div class="how-grid">
+        <div>
+          <p class="kicker"><span></span> How it works</p>
+          <h2>A software renderer, not a screenshot.</h2>
+        </div>
+        <ol>
+          <li><b>Parse.</b> The <code>.kicad_pcb</code> S-expression file is read directly: outline, copper, mask openings, silkscreen, drills, footprints.</li>
+          <li><b>Composite.</b> Each side becomes a texture: mask over copper, exposed pads in the board's finish, silkscreen on top, holes cut through.</li>
+          <li><b>Extrude.</b> The outline is triangulated into a slab; footprints become boxes sized from their fab outline and IPC-7351 names.</li>
+          <li><b>Rasterize.</b> A z-buffer renderer with supersampling draws each view to PNG. No WebGL, so the same code runs in the CLI.</li>
+        </ol>
+      </div>
+    </section>
+
+    <section class="library" id="library">
+      <div class="lib-grid">
+        <div>
+          <p class="kicker"><span></span> Library &amp; CLI</p>
+          <h2>Same engine, three ways.</h2>
+          <p class="lede">
+            The renderer is the <code>pcb23d</code> npm package. The CLI is that package compiled by Bun
+            into one binary per platform.
+          </p>
+        </div>
+        <div class="lib-cards">
+          <article>
+            <h3>TypeScript</h3>
+            <pre><code>import &#123; renderPcb &#125; from "pcb23d";
+
+const out = await renderPcb(zipBytes, &#123;
+  views: ["top", "bottom", "angle"],
+  width: 1600, height: 1200,
+&#125;);
+await Bun.write("top.png", out.images.top.png);</code></pre>
+            <p><code>bun add pcb23d</code> · works in Bun, Node 18+, Deno, and browsers.</p>
+          </article>
+          <article>
+            <h3>Single binary</h3>
+            <pre><code>pcb23d board.zip --out renders
+pcb23d *.kicad_pcb --views all --mask black
+pcb23d hat.kicad_pcb --views hero=45/30 --bg #ffffff</code></pre>
+            <p>Download for Linux, macOS, and Windows from <a href="https://github.com/TensorFleet/pcb23d/releases">GitHub Releases</a>.</p>
+          </article>
+        </div>
+      </div>
+    </section>
+  </main>
+</Base>
+
+<script>
+  import { zipSync } from "fflate";
+  import type { RenderRequest, WorkerMessage, BoardSummary } from "../lib/protocol";
+
+  const $ = <T extends Element>(sel: string) => document.querySelector<T>(sel)!;
+  const drop = $<HTMLDivElement>("#drop-zone");
+  const picker = $<HTMLButtonElement>("#pick-file");
+  const tryExample = $<HTMLButtonElement>("#try-example");
+  const fileInput = $<HTMLInputElement>("#file-input");
+  const errorEl = $<HTMLParagraphElement>("#error");
+  const result = $<HTMLElement>("#result");
+  const resultTitle = $<HTMLHeadingElement>("#result-title");
+  const resultMeta = $<HTMLParagraphElement>("#result-meta");
+  const tabs = $<HTMLDivElement>("#tabs");
+  const preview = $<HTMLImageElement>("#preview");
+  const previewInfo = $<HTMLSpanElement>("#preview-info");
+  const progress = $<HTMLDivElement>("#progress");
+  const progressText = $<HTMLElement>("#progress-text");
+  const downloadOne = $<HTMLAnchorElement>("#download-one");
+  const downloadAll = $<HTMLButtonElement>("#download-all");
+  const resetBtn = $<HTMLButtonElement>("#reset");
+  const optMask = $<HTMLSelectElement>("#opt-mask");
+  const optFinish = $<HTMLSelectElement>("#opt-finish");
+  const optSize = $<HTMLSelectElement>("#opt-size");
+  const optComponents = $<HTMLInputElement>("#opt-components");
+  const optAz = $<HTMLInputElement>("#opt-az");
+  const optEl = $<HTMLInputElement>("#opt-el");
+  const azOut = $<HTMLOutputElement>("#az-out");
+  const elOut = $<HTMLOutputElement>("#el-out");
+  const renderCustom = $<HTMLButtonElement>("#render-custom");
+
+  const STANDARD_VIEWS: RenderRequest["views"] = [
+    { name: "top", spec: "top" },
+    { name: "bottom", spec: "bottom" },
+    { name: "angle", spec: "angle" },
+    { name: "angle-bottom", spec: "angle-bottom" },
+  ];
+  const LABELS: Record<string, string> = { top: "Top", bottom: "Bottom", angle: "Angle", "angle-bottom": "Angle (bottom)", custom: "Custom" };
+
+  let worker: Worker | null = null;
+  let requestId = 0;
+  let stem = "board";
+  let board: BoardSummary | null = null;
+  const images = new Map<string, { blob: Blob; url: string; width: number; height: number; ms: number }>();
+  let active = "angle";
+
+  function getWorker(): Worker {
+    if (worker) return worker;
+    worker = new Worker(new URL("../lib/render.worker.ts", import.meta.url), { type: "module" });
+    worker.onmessage = (event: MessageEvent<WorkerMessage>) => onMessage(event.data);
+    worker.onerror = (event) => showError(`renderer crashed: ${event.message}`);
+    return worker;
+  }
+
+  function showError(message: string) {
+    errorEl.hidden = false;
+    errorEl.textContent = message;
+    progress.hidden = true;
+  }
+
+  function sceneOptions(): RenderRequest["scene"] {
+    return {
+      ...(optMask.value ? { maskColor: optMask.value } : {}),
+      ...(optFinish.value ? { copperFinish: optFinish.value } : {}),
+      components: optComponents.checked,
+      pixelsPerMm: 16,
+    };
+  }
+
+  function size(): [number, number] {
+    const [w, h] = optSize.value.split("x").map(Number);
+    return [w ?? 1600, h ?? 1200];
+  }
+
+  function send(views: RenderRequest["views"], bytes?: ArrayBuffer, fileName?: string) {
+    const [width, height] = size();
+    const req: RenderRequest = {
+      type: "render",
+      id: ++requestId,
+      ...(bytes ? { bytes } : {}),
+      ...(fileName ? { fileName } : {}),
+      views,
+      width,
+      height,
+      supersample: 2,
+      scene: sceneOptions(),
+    };
+    progress.hidden = false;
+    progressText.textContent = bytes ? "Parsing board…" : "Rendering…";
+    errorEl.hidden = true;
+    getWorker().postMessage(req, bytes ? [bytes] : []);
+  }
+
+  function onMessage(msg: WorkerMessage) {
+    if (msg.id !== requestId) return;
+    if (msg.type === "error") {
+      showError(msg.message);
+      return;
+    }
+    if (msg.type === "parsed") {
+      board = msg.board;
+      const s = msg.board.stats;
+      resultTitle.textContent = msg.board.title || msg.board.path.split("/").pop() || "Board";
+      resultMeta.textContent = `${msg.board.widthMm} × ${msg.board.heightMm} mm · ${msg.board.thickness} mm · ${s.copperLayers} copper layers · ${s.footprints} footprints · ${s.tracks} tracks · ${s.vias} vias${msg.board.outlineFromEdgeCuts ? "" : " · no Edge.Cuts, outline estimated"}`;
+      progressText.textContent = "Rendering top…";
+      return;
+    }
+    if (msg.type === "image") {
+      const blob = new Blob([msg.png], { type: "image/png" });
+      const prev = images.get(msg.name);
+      if (prev) URL.revokeObjectURL(prev.url);
+      images.set(msg.name, { blob, url: URL.createObjectURL(blob), width: msg.width, height: msg.height, ms: msg.ms });
+      renderTabs();
+      if (!images.has(active)) active = msg.name;
+      if (msg.name === active || images.size === 1) show(msg.name);
+      const order = ["top", "bottom", "angle", "angle-bottom"];
+      const next = order.find((n) => !images.has(n));
+      progressText.textContent = next ? `Rendering ${LABELS[next] ?? next}…` : "Finishing…";
+      return;
+    }
+    if (msg.type === "done") {
+      progress.hidden = true;
+      downloadAll.disabled = images.size === 0;
+    }
+  }
+
+  function renderTabs() {
+    tabs.replaceChildren(
+      ...[...images.keys()].map((name) => {
+        const b = document.createElement("button");
+        b.type = "button";
+        b.role = "tab";
+        b.textContent = LABELS[name] ?? name;
+        b.className = name === active ? "active" : "";
+        b.addEventListener("click", () => show(name));
+        return b;
+      }),
+    );
+  }
+
+  function show(name: string) {
+    const img = images.get(name);
+    if (!img) return;
+    active = name;
+    preview.src = img.url;
+    previewInfo.textContent = `${LABELS[name] ?? name} · ${img.width} × ${img.height} · ${img.ms} ms`;
+    downloadOne.href = img.url;
+    downloadOne.download = `${stem}-${name}.png`;
+    renderTabs();
+  }
+
+  async function openFile(file: File) {
+    const name = file.name;
+    if (!/\.(zip|kicad_pcb)$/i.test(name)) {
+      showError("Please drop a .zip of a KiCad project or a .kicad_pcb file.");
+      return;
+    }
+    stem = name.replace(/\.(zip|kicad_pcb)$/i, "");
+    for (const img of images.values()) URL.revokeObjectURL(img.url);
+    images.clear();
+    board = null;
+    active = "angle";
+    result.hidden = false;
+    resultTitle.textContent = name;
+    resultMeta.textContent = "";
+    preview.removeAttribute("src");
+    previewInfo.textContent = "";
+    downloadAll.disabled = true;
+    tabs.replaceChildren();
+    result.scrollIntoView({ behavior: "smooth", block: "start" });
+    send(STANDARD_VIEWS, await file.arrayBuffer(), name);
+  }
+
+  picker.addEventListener("click", () => fileInput.click());
+  fileInput.addEventListener("change", () => {
+    const f = fileInput.files?.[0];
+    if (f) void openFile(f);
+    fileInput.value = "";
+  });
+  drop.addEventListener("click", (e) => {
+    if ((e.target as HTMLElement).closest("button")) return;
+    fileInput.click();
+  });
+  drop.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" || e.key === " ") fileInput.click();
+  });
+  for (const target of [drop, document.body]) {
+    target.addEventListener("dragover", (e) => {
+      e.preventDefault();
+      drop.classList.add("dropping");
+    });
+    target.addEventListener("dragleave", () => drop.classList.remove("dropping"));
+    target.addEventListener("drop", (e) => {
+      e.preventDefault();
+      drop.classList.remove("dropping");
+      const f = (e as DragEvent).dataTransfer?.files?.[0];
+      if (f) void openFile(f);
+    });
+  }
+  tryExample.addEventListener("click", async () => {
+    tryExample.disabled = true;
+    try {
+      const res = await fetch("/examples/ecc83-pp.kicad_pcb");
+      if (!res.ok) throw new Error(`example ${res.status}`);
+      await openFile(new File([await res.blob()], "ecc83-pp.kicad_pcb"));
+    } catch (error) {
+      showError(`could not load the example: ${(error as Error).message}`);
+    } finally {
+      tryExample.disabled = false;
+    }
+  });
+  resetBtn.addEventListener("click", () => {
+    result.hidden = true;
+    document.getElementById("top")?.scrollIntoView({ behavior: "smooth" });
+  });
+
+  const rerender = () => {
+    if (!board) return;
+    const views = [...STANDARD_VIEWS, ...(images.has("custom") ? [customView()] : [])];
+    send(views);
+  };
+  optMask.addEventListener("change", rerender);
+  optFinish.addEventListener("change", rerender);
+  optSize.addEventListener("change", rerender);
+  optComponents.addEventListener("change", rerender);
+  optAz.addEventListener("input", () => (azOut.value = `${optAz.value}°`));
+  optEl.addEventListener("input", () => (elOut.value = `${optEl.value}°`));
+  function customView(): RenderRequest["views"][number] {
+    return {
+      name: "custom",
+      spec: { azimuth: Number(optAz.value), elevation: Number(optEl.value), projection: "perspective", fov: 28 },
+    };
+  }
+  renderCustom.addEventListener("click", () => {
+    if (!board) return;
+    active = "custom";
+    send([customView()]);
+  });
+
+  downloadAll.addEventListener("click", async () => {
+    const entries: Record<string, Uint8Array> = {};
+    for (const [name, img] of images) entries[`${stem}-${name}.png`] = new Uint8Array(await img.blob.arrayBuffer());
+    const zip = zipSync(entries, { level: 0 });
+    const url = URL.createObjectURL(new Blob([zip as BlobPart], { type: "application/zip" }));
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${stem}-3d.zip`;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 5000);
+  });
+</script>
+
+<style>
+  .hero {
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 80px 32px 56px;
+  }
+  .hero-copy {
+    text-align: center;
+  }
+  .hero-copy .kicker {
+    justify-content: center;
+  }
+  .hero h1 {
+    margin: 20px 0 18px;
+    font-size: clamp(3rem, 8vw, 6.4rem);
+    line-height: 0.88;
+    letter-spacing: -0.07em;
+    font-weight: 760;
+  }
+  .hero h1 em {
+    font-style: normal;
+    color: var(--green);
+  }
+  .hero-lede {
+    margin: 0 auto;
+    max-width: 620px;
+    color: var(--muted);
+    font-size: clamp(1rem, 1.6vw, 1.15rem);
+    line-height: 1.55;
+  }
+  .hero-lede code {
+    color: var(--ink);
+    font-size: 0.92em;
+  }
+  .drop {
+    display: grid;
+    grid-template-columns: 220px 1fr;
+    gap: 28px;
+    align-items: center;
+    margin: 44px auto 0;
+    max-width: 760px;
+    padding: 22px;
+    border: 1px dashed var(--line-2);
+    border-radius: 18px;
+    background: var(--paper-2);
+    cursor: pointer;
+    transition: border-color 0.15s, background 0.15s;
+  }
+  .drop:hover,
+  .drop:focus-visible,
+  .drop.dropping {
+    border-color: var(--acid);
+    background: var(--paper-3);
+    outline: none;
+  }
+  .drop-board {
+    position: relative;
+    height: 140px;
+    border-radius: 8px;
+    background: linear-gradient(145deg, #2f793f, #175a31);
+    border: 2px solid #6ac468;
+    transform: perspective(500px) rotateX(38deg) rotateZ(-8deg);
+    box-shadow: 8px 14px 0 -2px #8a7a3a;
+  }
+  .drop-board i {
+    position: absolute;
+    width: 12px;
+    height: 12px;
+    border: 3px solid #cfb34e;
+    border-radius: 50%;
+    background: var(--paper);
+  }
+  .drop-board i:nth-child(1) { left: 8px; top: 8px; }
+  .drop-board i:nth-child(2) { right: 8px; top: 8px; }
+  .drop-board i:nth-child(3) { left: 8px; bottom: 8px; }
+  .drop-board i:nth-child(4) { right: 8px; bottom: 8px; }
+  .drop-board span,
+  .drop-board b,
+  .drop-board em {
+    position: absolute;
+    color: #c4c7c0;
+    font: 8px ui-monospace, monospace;
+  }
+  .drop-board span {
+    left: 0;
+    top: 42%;
+    padding: 8px 10px;
+    background: linear-gradient(#cfd1c9, #777c76);
+    color: #222;
+  }
+  .drop-board b {
+    left: 42%;
+    top: 38%;
+    padding: 14px 16px;
+    background: #121512;
+    box-shadow: 3px 4px 0 #0a0c0a;
+  }
+  .drop-board em {
+    right: 18%;
+    top: 34%;
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    display: grid;
+    place-items: center;
+    background: radial-gradient(circle, #c6c8bd 0 18%, #535952 19% 32%, #bbbdb4 33% 45%, #333 46%);
+    font-style: normal;
+  }
+  .drop-copy strong {
+    display: block;
+    margin-bottom: 6px;
+    font-size: 18px;
+  }
+  .drop-copy p {
+    margin: 0 0 14px;
+    color: var(--muted);
+    font-size: 14px;
+  }
+  .drop-actions {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+  .btn-primary,
+  .btn-ghost {
+    border-radius: 10px;
+    padding: 10px 16px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    border: 1px solid transparent;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .btn-primary {
+    background: var(--acid);
+    color: #162013;
+  }
+  .btn-primary:disabled {
+    opacity: 0.45;
+    cursor: default;
+  }
+  .btn-ghost {
+    background: transparent;
+    color: var(--ink);
+    border-color: var(--line-2);
+  }
+  .btn-ghost:hover {
+    border-color: var(--acid);
+  }
+  .form-error {
+    margin: 14px auto 0;
+    max-width: 760px;
+    color: var(--danger);
+    font-size: 13px;
+  }
+  .result {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 16px 32px 72px;
+  }
+  .result-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    gap: 24px;
+    flex-wrap: wrap;
+    margin-bottom: 18px;
+  }
+  .result-head h2 {
+    margin: 10px 0 6px;
+    font-size: clamp(1.6rem, 3vw, 2.4rem);
+    letter-spacing: -0.04em;
+  }
+  .result-meta {
+    margin: 0;
+    color: var(--muted);
+    font-size: 13px;
+  }
+  .result-actions {
+    display: flex;
+    gap: 10px;
+  }
+  .result-body {
+    display: grid;
+    grid-template-columns: 1fr 280px;
+    gap: 20px;
+    align-items: start;
+  }
+  .stage {
+    background: var(--paper-2);
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    overflow: hidden;
+  }
+  .tabs {
+    display: flex;
+    gap: 4px;
+    padding: 10px;
+    border-bottom: 1px solid var(--line);
+    flex-wrap: wrap;
+  }
+  .tabs button {
+    border: 1px solid transparent;
+    background: transparent;
+    color: var(--muted);
+    padding: 7px 12px;
+    border-radius: 8px;
+    font-size: 13px;
+    cursor: pointer;
+  }
+  .tabs button.active {
+    color: var(--ink);
+    background: var(--paper-3);
+    border-color: var(--line-2);
+  }
+  .canvas-wrap {
+    position: relative;
+    aspect-ratio: 4 / 3;
+    display: grid;
+    place-items: center;
+    background:
+      radial-gradient(circle at 50% 40%, color-mix(in srgb, var(--ink) 6%, transparent), transparent 70%),
+      repeating-conic-gradient(color-mix(in srgb, var(--ink) 4%, transparent) 0 25%, transparent 0 50%) 0 0 / 24px 24px;
+  }
+  .canvas-wrap img {
+    max-width: 100%;
+    max-height: 100%;
+    display: block;
+  }
+  .canvas-wrap img:not([src]) {
+    display: none;
+  }
+  .progress {
+    position: absolute;
+    inset: auto 0 0 0;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 16px;
+    background: color-mix(in srgb, var(--paper) 80%, transparent);
+    backdrop-filter: blur(6px);
+    font: 12px ui-monospace, monospace;
+    color: var(--muted);
+  }
+  .progress span {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    border: 2px solid var(--acid);
+    border-right-color: transparent;
+    animation: spin 0.8s linear infinite;
+  }
+  @keyframes spin {
+    to {
+      transform: rotate(360deg);
+    }
+  }
+  .stage-foot {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 14px;
+    border-top: 1px solid var(--line);
+    font: 12px ui-monospace, monospace;
+    color: var(--muted);
+  }
+  .controls {
+    background: var(--paper-2);
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    padding: 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+  .controls h3 {
+    margin: 4px 0 0;
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: var(--muted);
+  }
+  .controls label {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    font-size: 13px;
+  }
+  .controls label.check {
+    flex-direction: row;
+    align-items: center;
+    gap: 8px;
+  }
+  .controls select,
+  .controls input[type="range"] {
+    width: 100%;
+    accent-color: var(--acid);
+  }
+  .controls select {
+    background: var(--paper-3);
+    color: var(--ink);
+    border: 1px solid var(--line-2);
+    border-radius: 8px;
+    padding: 8px 10px;
+    font-size: 13px;
+  }
+  .controls .range span {
+    display: flex;
+    justify-content: space-between;
+  }
+  .controls output {
+    color: var(--muted);
+    font-family: ui-monospace, monospace;
+  }
+  .hint {
+    margin: 0;
+    color: var(--muted);
+    font-size: 12px;
+    line-height: 1.5;
+  }
+  .how,
+  .library {
+    border-top: 1px solid var(--line);
+    padding: 72px 32px;
+  }
+  .how-grid,
+  .lib-grid {
+    max-width: 1100px;
+    margin: 0 auto;
+    display: grid;
+    grid-template-columns: 1fr 1.4fr;
+    gap: 48px;
+  }
+  .how h2,
+  .library h2 {
+    margin: 14px 0 12px;
+    font-size: clamp(1.8rem, 3.6vw, 2.8rem);
+    letter-spacing: -0.045em;
+    line-height: 1.05;
+  }
+  .how ol {
+    margin: 0;
+    padding-left: 22px;
+    color: var(--muted);
+    line-height: 1.7;
+    display: grid;
+    gap: 12px;
+  }
+  .how ol b {
+    color: var(--ink);
+  }
+  .how code,
+  .library code {
+    color: var(--ink);
+    font-size: 0.92em;
+  }
+  .lede {
+    color: var(--muted);
+    line-height: 1.6;
+  }
+  .lib-cards {
+    display: grid;
+    gap: 16px;
+  }
+  .lib-cards article {
+    background: var(--paper-2);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    padding: 18px 20px;
+  }
+  .lib-cards h3 {
+    margin: 0 0 10px;
+    font-size: 15px;
+  }
+  .lib-cards pre {
+    margin: 0 0 10px;
+    padding: 14px;
+    border-radius: 10px;
+    background: var(--paper);
+    border: 1px solid var(--line);
+    overflow-x: auto;
+    font-size: 12.5px;
+    line-height: 1.55;
+  }
+  .lib-cards p {
+    margin: 0;
+    color: var(--muted);
+    font-size: 13px;
+  }
+  .lib-cards a {
+    color: var(--green);
+  }
+  @media (max-width: 900px) {
+    .result-body,
+    .how-grid,
+    .lib-grid {
+      grid-template-columns: 1fr;
+    }
+  }
+  @media (max-width: 640px) {
+    .hero {
+      padding: 56px 18px 40px;
+    }
+    .drop {
+      grid-template-columns: 1fr;
+    }
+    .drop-board {
+      display: none;
+    }
+    .result,
+    .how,
+    .library {
+      padding-left: 18px;
+      padding-right: 18px;
+    }
+  }
+</style>

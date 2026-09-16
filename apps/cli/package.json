@@ -1,0 +1,22 @@
+{
+  "name": "@pcb23d/cli",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "pcb23d command line: render KiCad boards to 3D PNGs. Compiles to a single binary with `bun build --compile`.",
+  "bin": { "pcb23d": "./src/cli.ts" },
+  "scripts": {
+    "start": "bun src/cli.ts",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "build": "bun build src/cli.ts --compile --minify --outfile dist/pcb23d",
+    "build:all": "bun scripts/build-all.ts",
+    "test": "bun test"
+  },
+  "dependencies": {
+    "pcb23d": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/bun": "1.2.21",
+    "typescript": "5.9.2"
+  }
+}

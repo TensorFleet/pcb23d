@@ -1,0 +1,8 @@
+node_modules/
+dist/
+.astro/
+.wrangler/
+apps/web/public/kicad-wasm/
+apps/web/worker-configuration.d.ts
+apps/web/public/kicad-wasm/
+*.tsbuildinfo
