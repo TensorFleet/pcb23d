@@ -161,5 +161,21 @@ describe("STEP-only project models", () => {
     });
     expect(mesh?.triangles).toBe(2);
     expect(mesh?.groups[0]?.color).toEqual([255, 127.5, 0]);
+    // KiCad library STEPs colour per B-rep face, not per mesh
+    const faces = meshFromOcct({
+      success: true,
+      meshes: [
+        {
+          attributes: { position: { array: [0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 1, 0] } },
+          index: { array: [0, 1, 2, 1, 3, 2] },
+          brep_faces: [
+            { first: 0, last: 0, color: [0, 0, 0] },
+            { first: 1, last: 1, color: [1, 1, 1] },
+          ],
+        },
+      ],
+    });
+    expect(faces?.triangles).toBe(2);
+    expect(faces?.groups.map((g) => g.color)).toEqual([[0, 0, 0], [255, 255, 255]]);
   });
 });

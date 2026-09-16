@@ -5,10 +5,20 @@
  */
 import type { ModelMesh, MeshGroup } from "./vrml";
 
-export interface OcctMeshLike {
-  attributes: { position: { array: ArrayLike<number> } };
-  index?: { array: ArrayLike<number> };
+export interface OcctFaceLike {
+  /** First and last triangle index (inclusive) of this B-rep face. */
+  first: number;
+  last: number;
   color?: ArrayLike<number>;
+}
+
+export interface OcctMeshLike {
+  attributes: { position: { array: ArrayLike<number> }; normal?: { array: ArrayLike<number> } };
+  index?: { array: ArrayLike<number> };
+  /** Mesh-level colour (rare in KiCad library STEPs, which colour per face). */
+  color?: ArrayLike<number>;
+  /** Per-face colour ranges; KiCad library STEPs carry their colours here. */
+  brep_faces?: OcctFaceLike[];
 }
 
 export interface OcctResultLike {
@@ -31,19 +41,31 @@ export function meshFromOcct(result: OcctResultLike): ModelMesh | null {
   let triangles = 0;
   const min: [number, number, number] = [Infinity, Infinity, Infinity];
   const max: [number, number, number] = [-Infinity, -Infinity, -Infinity];
-  for (const m of result.meshes) {
-    const pos = m.attributes.position.array;
-    const color: [number, number, number] = m.color
-      ? [m.color[0]! * 255, m.color[1]! * 255, m.color[2]! * 255]
-      : DEFAULT_STEP_COLOR;
+  const toRgb = (c: ArrayLike<number> | undefined, fallback: [number, number, number]): [number, number, number] =>
+    c && c.length >= 3 ? [c[0]! * 255, c[1]! * 255, c[2]! * 255] : fallback;
+  const groupFor = (color: [number, number, number]) => {
     const key = color.map((c) => Math.round(c)).join(",");
     let g = groups.get(key);
     if (!g) groups.set(key, (g = { color, tris: [] }));
-    const push = (i: number) => {
+    return g;
+  };
+  for (const m of result.meshes) {
+    const pos = m.attributes.position.array;
+    const meshColor = toRgb(m.color, DEFAULT_STEP_COLOR);
+    const idx = m.index?.array;
+    const triCount = idx ? Math.floor(idx.length / 3) : Math.floor(pos.length / 9);
+    // colour per triangle: face ranges win, then the mesh colour
+    const faceColor = new Array<[number, number, number] | undefined>(triCount);
+    for (const f of m.brep_faces ?? []) {
+      if (!f.color) continue;
+      const c = toRgb(f.color, meshColor);
+      for (let t = Math.max(0, f.first); t <= Math.min(f.last, triCount - 1); t++) faceColor[t] = c;
+    }
+    const pushVertex = (g: { tris: number[] }, i: number) => {
       const x = pos[i * 3]!;
       const y = pos[i * 3 + 1]!;
       const z = pos[i * 3 + 2]!;
-      g!.tris.push(x, y, z);
+      g.tris.push(x, y, z);
       if (x < min[0]) min[0] = x;
       if (y < min[1]) min[1] = y;
       if (z < min[2]) min[2] = z;
@@ -51,18 +73,18 @@ export function meshFromOcct(result: OcctResultLike): ModelMesh | null {
       if (y > max[1]) max[1] = y;
       if (z > max[2]) max[2] = z;
     };
-    if (m.index) {
-      const idx = m.index.array;
-      for (let i = 0; i + 2 < idx.length; i += 3) {
-        push(idx[i]!);
-        push(idx[i + 1]!);
-        push(idx[i + 2]!);
-        triangles++;
+    for (let t = 0; t < triCount; t++) {
+      const g = groupFor(faceColor[t] ?? meshColor);
+      if (idx) {
+        pushVertex(g, idx[t * 3]!);
+        pushVertex(g, idx[t * 3 + 1]!);
+        pushVertex(g, idx[t * 3 + 2]!);
+      } else {
+        pushVertex(g, t * 3);
+        pushVertex(g, t * 3 + 1);
+        pushVertex(g, t * 3 + 2);
       }
-    } else {
-      const n = Math.floor(pos.length / 9) * 3;
-      for (let i = 0; i < n; i++) push(i);
-      triangles += n / 3;
+      triangles++;
     }
   }
   if (triangles === 0) return null;
