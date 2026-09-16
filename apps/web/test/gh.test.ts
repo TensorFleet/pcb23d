@@ -51,6 +51,10 @@ describe("parseImagePath", () => {
       slug: { kind: "gl", owner: "sixxie", repo: "dragon64", ref: "master" },
       format: "png",
     });
+    expect(parseImagePath("/img/gl/my_group/board.jpg")).toEqual({
+      slug: { kind: "gl", owner: "my_group", repo: "board" },
+      format: "jpg",
+    });
   });
   test("keeps dots in repo names that are not an extension", () => {
     expect(parseImagePath("/img/gh/bob/nancy.kicad")).toEqual({
@@ -106,6 +110,9 @@ describe("paths and keys", () => {
     expect(sourceUrl({ kind: "cb", owner: "o", repo: "r", ref: "a".repeat(40) })).toBe(
       `https://codeberg.org/o/r/src/commit/${"a".repeat(40)}`,
     );
+    expect(sourceUrl({ kind: "cb", owner: "o", repo: "r", ref: "v1.0", refKind: "tag" })).toBe(
+      "https://codeberg.org/o/r/src/tag/v1.0",
+    );
   });
 });
 
@@ -118,10 +125,21 @@ describe("parsePickerInput", () => {
       repo: "nancy",
       ref: "main",
     });
+    expect(parsePickerInput("github.com/acme/board/tree/feature/foo")).toEqual({
+      kind: "gh",
+      owner: "acme",
+      repo: "board",
+      ref: "feature/foo",
+    });
     expect(parsePickerInput("img/gh/bob/nancy.jpg")).toEqual({
       kind: "gh",
       owner: "bob",
       repo: "nancy",
+    });
+    expect(parsePickerInput("https://github.com/acme/board.png")).toEqual({
+      kind: "gh",
+      owner: "acme",
+      repo: "board.png",
     });
   });
   test("Codeberg and GitLab URLs", () => {
@@ -135,6 +153,14 @@ describe("parsePickerInput", () => {
       owner: "NollKollTroll",
       repo: "OpenSpand",
       ref: "main",
+      refKind: "branch",
+    });
+    expect(parsePickerInput("codeberg.org/o/r/src/tag/v1.0")).toEqual({
+      kind: "cb",
+      owner: "o",
+      repo: "r",
+      ref: "v1.0",
+      refKind: "tag",
     });
     expect(parsePickerInput("https://gitlab.com/sixxie/dragon64/-/tree/master")).toEqual({
       kind: "gl",

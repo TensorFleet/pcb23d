@@ -38,9 +38,12 @@ export interface ImageSlug {
   repo: string;
   /** Branch, tag, or commit. Undefined means the repository default branch. */
   ref?: string;
+  /** How to link the ref on Codeberg (`src/branch` vs `src/tag` vs `src/commit`). */
+  refKind?: "branch" | "tag" | "commit";
 }
 
-const OWNER_RE = /^[A-Za-z0-9](?:[A-Za-z0-9]|-(?=[A-Za-z0-9])){0,38}$/;
+const GITHUB_OWNER_RE = /^[A-Za-z0-9](?:[A-Za-z0-9]|-(?=[A-Za-z0-9])){0,38}$/;
+const FORGE_OWNER_RE = /^[A-Za-z0-9](?:[A-Za-z0-9._-]{0,98}[A-Za-z0-9])?$/;
 const REPO_RE = /^[A-Za-z0-9._-]{1,100}$/;
 const REF_RE = /^[A-Za-z0-9._\-/]{1,255}$/;
 const SHA_RE = /^[0-9a-f]{40}$/i;
@@ -56,6 +59,11 @@ export function kindOf(slug: ImageSlug): SourceKind {
 
 export function isCommitSha(ref: string | undefined): ref is string {
   return !!ref && SHA_RE.test(ref);
+}
+
+function ownerOk(owner: string, kind: SourceKind): boolean {
+  if (owner === "." || owner === "..") return false;
+  return kind === "gh" ? GITHUB_OWNER_RE.test(owner) : FORGE_OWNER_RE.test(owner);
 }
 
 /**
@@ -90,7 +98,7 @@ export function parseImagePath(
   } catch {
     return null;
   }
-  if (!OWNER_RE.test(owner) || !REPO_RE.test(repo) || repo === "." || repo === "..") return null;
+  if (!ownerOk(owner, kind) || !REPO_RE.test(repo) || repo === "." || repo === "..") return null;
   if (ref !== undefined && (!REF_RE.test(ref) || ref.includes("..") || ref.endsWith("/")))
     return null;
   const slug: ImageSlug = ref ? { kind, owner, repo, ref } : { kind, owner, repo };
@@ -120,7 +128,8 @@ export function sourceUrl(slug: ImageSlug): string {
   if (!slug.ref) return base;
   const ref = slug.ref.split("/").map(encodeURIComponent).join("/");
   if (kind === "cb") {
-    const marker = isCommitSha(slug.ref) ? "commit" : "branch";
+    const marker =
+      slug.refKind ?? (isCommitSha(slug.ref) ? "commit" : "branch");
     return `${base}/src/${marker}/${ref}`;
   }
   if (kind === "gl") return `${base}/-/tree/${ref}`;
@@ -138,8 +147,12 @@ export function parsePickerInput(raw: string): ImageSlug | null {
   try {
     value = value.replace(/^https?:\/\//i, "");
     value = value.replace(/^(www\.)?pcbto3d\.com\//i, "");
-    if (value.toLowerCase().startsWith("img/")) value = value.slice(4);
-    value = value.replace(/\.(jpe?g|png)$/i, "");
+    value = value.replace(/^\/+/, "");
+    const fromImagePath = value.toLowerCase().startsWith("img/");
+    if (fromImagePath) {
+      value = value.slice(4);
+      value = value.replace(/\.(jpe?g|png)$/i, "");
+    }
 
     let kind: SourceKind | undefined;
     const prefix = /^(gh|cb|gl)\//i.exec(value);
@@ -163,36 +176,56 @@ export function parsePickerInput(raw: string): ImageSlug | null {
     const owner = segs[0];
     const repo = segs[1]?.replace(/\.git$/, "");
     if (!owner || !repo) return null;
-    if (!OWNER_RE.test(owner) || !REPO_RE.test(repo) || repo === "." || repo === "..") return null;
+    if (!ownerOk(owner, kind) || !REPO_RE.test(repo) || repo === "." || repo === "..") return null;
 
-    const ref = refFromHostPath(kind, segs.slice(2));
-    if (ref !== undefined && (!REF_RE.test(ref) || ref.includes("..") || ref.endsWith("/")))
+    const parsed = refFromHostPath(kind, segs.slice(2));
+    if (
+      parsed?.ref !== undefined &&
+      (!REF_RE.test(parsed.ref) || parsed.ref.includes("..") || parsed.ref.endsWith("/"))
+    )
       return null;
-    return ref ? { kind, owner, repo, ref } : { kind, owner, repo };
+    const slug: ImageSlug = parsed?.ref
+      ? { kind, owner, repo, ref: parsed.ref, ...(parsed.refKind ? { refKind: parsed.refKind } : {}) }
+      : { kind, owner, repo };
+    return slug;
   } catch {
     return null;
   }
 }
 
-function refFromHostPath(kind: SourceKind, rest: string[]): string | undefined {
+function refFromHostPath(
+  kind: SourceKind,
+  rest: string[],
+): { ref: string; refKind?: ImageSlug["refKind"] } | undefined {
   const [marker, ...tail] = rest;
   if (!marker) return undefined;
-  if (marker.startsWith("@")) return [marker.slice(1), ...tail].join("/") || undefined;
+  if (marker.startsWith("@")) {
+    const ref = [marker.slice(1), ...tail].join("/");
+    return ref ? { ref } : undefined;
+  }
 
   if (kind === "cb" && marker === "src") {
     const refKind = tail[0];
-    const ref = tail[1];
-    if ((refKind === "branch" || refKind === "commit" || refKind === "tag") && ref) return ref;
+    const ref = tail.slice(1).join("/");
+    if ((refKind === "branch" || refKind === "commit" || refKind === "tag") && ref) {
+      return { ref, refKind };
+    }
     return undefined;
   }
   if (kind === "gl" && marker === "-") {
     const glKind = tail[0];
-    const ref = tail[1];
+    const ref = tail.slice(1).join("/");
     if ((glKind === "tree" || glKind === "blob" || glKind === "raw" || glKind === "commit") && ref)
-      return ref;
+      return { ref, ...(glKind === "commit" ? { refKind: "commit" as const } : {}) };
     return undefined;
   }
-  if (marker === "tree" || marker === "blob" || marker === "raw") return tail[0];
-  if (marker === "commit") return tail[0];
+  if (marker === "tree" || marker === "blob" || marker === "raw") {
+    const ref = tail.join("/");
+    return ref ? { ref } : undefined;
+  }
+  if (marker === "commit") {
+    const ref = tail[0];
+    return ref ? { ref, refKind: "commit" } : undefined;
+  }
   return undefined;
 }
