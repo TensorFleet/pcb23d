@@ -32,7 +32,7 @@ export {
   type SourceKind,
 } from "./hosts";
 
-export const RENDER_VERSION = 1;
+export const RENDER_VERSION = 2;
 
 /** Social-card size: what og:image consumers expect. */
 export const OG_WIDTH = 1200;
