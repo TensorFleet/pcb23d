@@ -44,12 +44,14 @@ import Base from "../layouts/Base.astro";
         </div>
         <div class="drop-copy">
           <strong>Drop a <code>.zip</code> or <code>.kicad_pcb</code> here</strong>
-          <p>Zips are searched for the project's board. Files stay in your browser.</p>
+          <p>Choose the project folder when the board uses local 3D models. Files stay in your browser.</p>
           <div class="drop-actions">
             <button type="button" id="pick-file" class="btn-primary">Choose file…</button>
+            <button type="button" id="pick-folder" class="btn-ghost">Choose project folder…</button>
             <button type="button" id="try-example" class="btn-ghost">Try an example board</button>
           </div>
           <input id="file-input" type="file" hidden accept=".zip,.kicad_pcb,application/zip" />
+          <input id="folder-input" type="file" hidden multiple />
         </div>
       </div>
       <p class="form-error" id="error" hidden></p>
@@ -269,8 +271,11 @@ pcb23d hat.kicad_pcb --views hero=45/30 --bg #ffffff</code></pre>
   const urlForm = $<HTMLFormElement>("#url-form");
   const urlInput = $<HTMLInputElement>("#url-input");
   const picker = $<HTMLButtonElement>("#pick-file");
+  const folderPicker = $<HTMLButtonElement>("#pick-folder");
   const tryExample = $<HTMLButtonElement>("#try-example");
   const fileInput = $<HTMLInputElement>("#file-input");
+  const folderInput = $<HTMLInputElement>("#folder-input");
+  (folderInput as HTMLInputElement & { webkitdirectory: boolean }).webkitdirectory = true;
   const errorEl = $<HTMLParagraphElement>("#error");
   const result = $<HTMLElement>("#result");
   const resultTitle = $<HTMLHeadingElement>("#result-title");
@@ -447,6 +452,25 @@ pcb23d hat.kicad_pcb --views hero=45/30 --bg #ffffff</code></pre>
     pendingProject = undefined;
   }
 
+  async function openProjectFolder(files: FileList) {
+    const selected = [...files].filter((file) => file.size > 0);
+    const boardFiles = selected.filter((file) => /\.kicad_pcb$/i.test(file.name));
+    if (!boardFiles.length) {
+      showError("That folder does not contain a .kicad_pcb file.");
+      return;
+    }
+    const archive: Record<string, Uint8Array> = {};
+    await Promise.all(
+      selected.map(async (file) => {
+        const path = file.webkitRelativePath || file.name;
+        archive[path.replace(/\\/g, "/")] = new Uint8Array(await file.arrayBuffer());
+      }),
+    );
+    const root = (selected[0]?.webkitRelativePath || "project").split("/")[0] || "project";
+    const zipped = zipSync(archive, { level: 0 });
+    await openFile(new File([Uint8Array.from(zipped).buffer], `${root}.zip`, { type: "application/zip" }));
+  }
+
   async function openUrl(raw: string) {
     const input = raw.trim();
     if (!input) return;
@@ -491,10 +515,16 @@ pcb23d hat.kicad_pcb --views hero=45/30 --bg #ffffff</code></pre>
   }
 
   picker.addEventListener("click", () => fileInput.click());
+  folderPicker.addEventListener("click", () => folderInput.click());
   fileInput.addEventListener("change", () => {
     const f = fileInput.files?.[0];
     if (f) void openFile(f);
     fileInput.value = "";
+  });
+  folderInput.addEventListener("change", () => {
+    const files = folderInput.files;
+    if (files?.length) void openProjectFolder(files);
+    folderInput.value = "";
   });
   drop.addEventListener("click", (e) => {
     if ((e.target as HTMLElement).closest("button")) return;
