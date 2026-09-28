@@ -68,7 +68,7 @@ export function estimateHeight(footprintName: string, bodyW: number, bodyH: numb
 /** Footprints that should not get a body box (bare holes, test points, artwork). */
 export function isBodilessFootprint(footprintName: string): boolean {
   const n = footprintName.toLowerCase();
-  return /mount(ing)?hole|fiducial|logo|test[-_ ]?point|\btp[_-]|solder[-_]?jumper|net[-_ ]?tie|stitching|^.*:via|_via_|symbol|marking|label|silk|openhardware|kicad-logo/.test(
+  return /mount(ing)?[-_ ]?hole|fiducial|logo|test[-_ ]?point|\btp[_-]|solder[-_]?jumper|net[-_ ]?tie|stitching|^.*:via|_via_|symbol|marking|label|silk|openhardware|kicad-logo/.test(
     n,
   );
 }

@@ -50,6 +50,14 @@ describe("parseBoard", () => {
     expect(board.components[0]!.side).toBe("front");
     expect(board.outline[0]!.outer).toHaveLength(4);
   });
+  test("mounting holes with a fab-layer outline get no placeholder body", () => {
+    const board = parseBoard(`(kicad_pcb (version 20221018) (layers (0 "F.Cu" signal) (31 "B.Cu" signal))
+      (footprint "koyomi:RPi_Hat_Mounting_Hole" (layer "F.Cu") (at 100 50)
+        (fp_circle (center 0 0) (end 3.1 0) (layer "F.Fab") (stroke (width 0.1) (type solid)) (fill none))
+        (pad "" np_thru_hole circle (at 0 0) (size 2.75 2.75) (drill 2.75) (layers "*.Cu" "*.Mask")))
+      (gr_rect (start 90 40) (end 110 60) (layer "Edge.Cuts") (stroke (width 0.1) (type solid)) (fill no)))`);
+    expect(board.components).toHaveLength(0);
+  });
   test("reads the 2026 footprint transform block", () => {
     const board = parseBoard(`(kicad_pcb (version 20260831) (layers (0 "F.Cu" signal) (2 "B.Cu" signal))
       (footprint "Test:R" (placed yes) (layer "F.Cu")
@@ -104,6 +112,8 @@ describe("heights", () => {
   test("skips holes and test points", () => {
     expect(isBodilessFootprint("MountingHole:MountingHole_3.2mm_M3")).toBe(true);
     expect(isBodilessFootprint("TestPoint:TestPoint_Pad_D1.5mm")).toBe(true);
+    expect(isBodilessFootprint("koyomi:RPi_Hat_Mounting_Hole")).toBe(true);
+    expect(isBodilessFootprint("Mechanical:Mounting-Hole_M2.5")).toBe(true);
     expect(isBodilessFootprint("Resistor_SMD:R_0402_1005Metric")).toBe(false);
   });
 });
