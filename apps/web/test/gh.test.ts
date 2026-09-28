@@ -88,13 +88,13 @@ describe("paths and keys", () => {
   });
   test("render keys sit under the pcbFiddle snapshot, lowercased", () => {
     expect(renderObjectKey("Bob", "Nancy", "a".repeat(40), OG_RENDER)).toBe(
-      `gh/bob/nancy/${"a".repeat(40)}/renders/angle-1200x630-v2.jpg`,
+      `gh/bob/nancy/${"a".repeat(40)}/renders/angle-1200x630-v3.jpg`,
     );
     expect(renderObjectKey("NollKollTroll", "OpenSpand", "a".repeat(40), OG_RENDER, "cb")).toBe(
-      `cb/nollkolltroll/openspand/${"a".repeat(40)}/renders/angle-1200x630-v2.jpg`,
+      `cb/nollkolltroll/openspand/${"a".repeat(40)}/renders/angle-1200x630-v3.jpg`,
     );
     expect(renderObjectKey("sixxie", "dragon64", "a".repeat(40), OG_RENDER, "gl")).toBe(
-      `gl/sixxie/dragon64/${"a".repeat(40)}/renders/angle-1200x630-v2.jpg`,
+      `gl/sixxie/dragon64/${"a".repeat(40)}/renders/angle-1200x630-v3.jpg`,
     );
   });
   test("sourceUrl points at the forge page for the ref", () => {
