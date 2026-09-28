@@ -418,7 +418,9 @@ class ParseContext {
     if (attrs.includes("dnp")) return;
     const models = parseModels(item);
     const hasModel = models.some((m) => m.key && !m.hide);
-    const bodiless = (isBodilessFootprint(name) && !boundsValid(fabBounds)) || (!hasBodyPad && !boundsValid(fabBounds));
+    // A name that says "no body" (mounting hole, test point, logo…) wins even when the
+    // footprint draws its outline on F.Fab, as hat/board mounting holes usually do.
+    const bodiless = isBodilessFootprint(name) || (!hasBodyPad && !boundsValid(fabBounds));
     if (bodiless && !hasModel) return;
 
     let body: Bounds | undefined;
